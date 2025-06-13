@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "WebAPI": {
-      "commandName": "Project",
-      "commandLineArgs": "--port 8090"
-    }
-  }
-}
