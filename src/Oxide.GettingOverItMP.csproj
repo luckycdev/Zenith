@@ -1,0 +1,118 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup>
+    <Version>0.6.3</Version>
+    <AssemblyName>Oxide.GettingOverItMP</AssemblyName>
+    <Authors>Oxide and Contributors</Authors>
+    <Description>Getting Over It with Bennett Foddy extension for the Oxide modding framework</Description>
+    <!--<RepositoryUrl>https://github.com/OxideMod/Oxide.Rust</RepositoryUrl>
+    <PackageLicenseUrl>https://github.com/OxideMod/Oxide.Rust/blob/develop/LICENSE.md</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/OxideMod/Oxide.Rust</PackageProjectUrl>
+    <PackageIconUrl>https://avatars1.githubusercontent.com/u/10712027?s=64</PackageIconUrl>-->
+    <Copyright>Copyright (c) 2017-$([System.DateTime]::Now.Year) $(Authors)</Copyright>
+    <PackageTags>gaming modding plugins unity unity3d</PackageTags>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <ManagedDir>GettingOverIt_Data\Managed</ManagedDir>
+    <StreamingAssetsDir>GettingOverIt_Data\StreamingAssets</StreamingAssetsDir>
+    <SteamAppId>240720</SteamAppId>
+    <SteamBranch>public</SteamBranch>
+    <SteamLogin>anonymous</SteamLogin>
+    <!--
+      Workaround for targeting net35 with dotnet CLI
+      https://github.com/Microsoft/msbuild/issues/1333#issuecomment-296346352
+    -->
+    <FrameworkPathOverride Condition="'$(TargetFramework)' == 'net35' And '$(OS)' == 'Windows_NT'">C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v3.5\Profile\Client</FrameworkPathOverride>
+    <FrameworkPathOverride Condition="'$(TargetFramework)' == 'net35' And '$(OS)' == 'OSX'">/Library/Frameworks/Mono.framework/Versions/Current/lib/mono/2.0-api</FrameworkPathOverride>
+    <AssemblyVersion>0.6.3.0</AssemblyVersion>
+    <FileVersion>0.6.3.0</FileVersion>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Facepunch.Steamworks" Version="2.3.3" />
+    <PackageReference Include="Oxide.References" Version="2.0.3779" />
+    <PackageReference Include="Oxide.Core" Version="2.0.3991" />
+    <Reference Include="Assembly-CSharp">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Oxide.GettingOverIt">
+      <HintPath>..\..\Oxide.GettingOverIt\src\bin\Release\netstandard2.0\Oxide.GettingOverIt.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\UnityEngine.AssetBundleModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.Physics2DModule">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\UnityEngine.Physics2DModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\..\Oxide.GettingOverIt\src\Dependencies\Patched\GettingOverIt_Data\Managed\UnityEngine.UI.dll</HintPath>
+    </Reference>
+    <Compile Remove="Dependencies\**" />
+    <EmbeddedResource Remove="Dependencies\**" />
+    <None Remove="Bundle\**; Files\**; Patched\**; **\Original\**; *.config; *.opj" />
+    <None Remove="Dependencies\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\lidgren-network-gen3\Lidgren.Network\Lidgren.Network.csproj" />
+    <ProjectReference Include="..\ServerShared\ServerShared.csproj" />
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <Target Name="Clean">
+    <RemoveDir Directories="$(ProjectDir)\bin\Bundle\$(PackageId)" Condition="Exists('$(ProjectDir)\bin\Bundle\$(PackageId)')" />
+  </Target>
+  <Target Name="ChangeAliasesOfStrongNameAssemblies" BeforeTargets="FindReferenceAssembliesForReferences;ResolveReferences">
+    <ItemGroup>
+      <ReferencePath Condition="'%(FileName)' == 'Oxide.References'">
+        <Aliases>Oxide</Aliases>
+      </ReferencePath>
+    </ItemGroup>
+  </Target>
+  <Target Name="AfterBuild">
+    <ItemGroup>
+      <CoreFiles Include="$(TargetDir)\Oxide.GettingOverItMP.dll" />
+      <CoreFiles Include="$(TargetDir)\Newtonsoft.Json.dll" />
+      <CoreFiles Include="$(TargetDir)\Lidgren.Network.dll" />
+      <CoreFiles Include="$(TargetDir)\ServerShared.dll" />
+      <CoreFiles Include="$(TargetDir)Facepunch.Steamworks.Win64.dll" />
+    </ItemGroup>
+    <ItemGroup>
+        <AssetFiles Include="$(SolutionDir)GOIMP_Content\Assets\AssetBundles\goimp_content" />
+    </ItemGroup>
+    <ItemGroup>
+      <SteamFiles Include="$(SolutionDir)\SteamRedist\*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CoreFiles)" DestinationFiles="@(CoreFiles->'$(ProjectDir)\bin\Bundle\$(PackageId)\$(ManagedDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(AssetFiles)" DestinationFiles="@(AssetFiles->'$(ProjectDir)\bin\Bundle\$(PackageId)\$(StreamingAssetsDir)\%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(SteamFiles)" DestinationFiles="@(SteamFiles->'$(ProjectDir)\bin\Bundle\$(PackageId)\GettingOverIt_Data\Plugins\x86_64\%(Filename)%(Extension)')" />
+  </Target>
+  <Target Name="LocalDeploy" AfterTargets="AfterBuild" Condition="Exists('$(SolutionDir)\.deploy')">
+    <Exec Command="start /b /wait taskkill /f /im GettingOverIt.exe /fi &quot;memusage gt 2&quot;" Condition="'$(OS)' == 'Windows_NT'" />
+    <Exec Command="start /b /wait taskkill /f /im CSharpCompiler.exe /fi &quot;memusage gt 2&quot;" Condition="'$(OS)' == 'Windows_NT'" />
+    <ReadLinesFromFile File="$(SolutionDir)\.deploy">
+      <Output PropertyName="DeployPath" TaskParameter="Lines" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <DeployFiles Include="$(ProjectDir)\bin\Bundle\$(PackageId)\**\*.*" />
+    </ItemGroup>
+    <Copy Condition="'$(DeployPath)' != ''" SourceFiles="@(DeployFiles)" DestinationFiles="@(DeployFiles->'$(DeployPath)\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+</Project>

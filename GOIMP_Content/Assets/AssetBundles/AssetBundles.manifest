@@ -1,0 +1,7 @@
+ManifestFileVersion: 0
+CRC: 1963609690
+AssetBundleManifest:
+  AssetBundleInfos:
+    Info_0:
+      Name: goimp_content
+      Dependencies: {}

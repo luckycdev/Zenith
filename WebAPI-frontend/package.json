@@ -1,0 +1,31 @@
+{
+  "name": "frontend-dev",
+  "version": "1.0.0",
+  "main": "parcel index.html",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^16.0.34",
+    "autoprefixer": "^7.2.5",
+    "babel-plugin-react-transform": "^3.0.0",
+    "babel-preset-env": "^1.7.0",
+    "babel-preset-react": "^6.24.1",
+    "node-sass": "^4.7.2",
+    "parcel-bundler": "^1.12.5",
+    "postcss-modules": "^1.1.0",
+    "typescript": "^2.6.2"
+  },
+  "scripts": {
+    "start": "parcel index.html --out-dir ./dist",
+    "build": "parcel build index.html --out-dir ./dist --public-url ./static"
+  },
+  "dependencies": {
+    "@types/prop-types": "^15.5.2",
+    "bootstrap": "4.0.0-beta.2",
+    "moment": "^2.20.1",
+    "popper.js": "^1.12.9",
+    "prop-types": "^15.6.0",
+    "react": "^16.2.0",
+    "react-dom": "^16.2.0",
+    "whatwg-fetch": "^2.0.3"
+  }
+}

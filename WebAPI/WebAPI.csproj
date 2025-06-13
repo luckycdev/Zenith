@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CommandLineArgumentsParser" Version="3.0.18" />
+    <PackageReference Include="Nancy" Version="2.0.0-clinteastwood" />
+    <PackageReference Include="Nancy.Authentication.Basic" Version="2.0.0-clinteastwood" />
+    <PackageReference Include="Nancy.Hosting.Self" Version="2.0.0-clinteastwood" />
+    <PackageReference Include="Nancy.Serialization.JsonNet" Version="2.0.0-clinteastwood" />
+  </ItemGroup>
+  <Target Name="CopyFiles" AfterTargets="Build">
+    <ItemGroup>
+      <FrontendDistFiles Include="$(SolutionDir)/WebAPI-frontend/dist/**/*.*" />
+    </ItemGroup>
+    <ItemGroup>
+      <UpdaterFiles Include="$(SolutionDir)\GettingOverItMP.Updater\bin\$(Configuration)\GettingOverItMP.Updater.exe" />
+    </ItemGroup>
+    <Exec WorkingDirectory="$(SolutionDir)\WebAPI-frontend" Command="npm install" />
+    <Exec WorkingDirectory="$(SolutionDir)\WebAPI-frontend" Command="npm run build" />
+    <Copy SourceFiles="@(FrontendDistFiles)" DestinationFiles="@(FrontendDistFiles->'$(OutputPath)\frontend\%(Filename)%(Extension)')" />
+  </Target>
+</Project>
