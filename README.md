@@ -4,6 +4,8 @@
 
 Download Zenith from [here](https://github.com/luckycdev/Zenith/releases/)
 
+Download Zenith plugins from [here](https://github.com/luckycdev/Zenith-Plugins/)
+
 For support, join https://discord.gg/B3MmvMa8rD
 
 # Flags:
@@ -44,6 +46,4 @@ A_Random_Folder/
 ```
 ---
 
-Zenith is a fork of [Skippeh's Oxide.GettingOverItMP](https://github.com/Skippeh/Oxide.GettingOverItMP/)
-
-Made possible by [Oxide](https://oxidemod.org/)
+Zenith is made possible by and a fork of [Skippeh's Oxide.GettingOverItMP](https://github.com/Skippeh/Oxide.GettingOverItMP/)
