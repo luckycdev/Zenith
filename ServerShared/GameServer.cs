@@ -10,11 +10,13 @@ using ServerShared.Networking;
 using ServerShared.Player;
 using Steamworks;
 using Color = UnityEngine.Color;
+using ServerShared.Plugins;
 
 namespace ServerShared
 {
     public class GameServer
     {
+        public static GameServer Instance { get; private set; }
         public string Name;
         public int Port => server.Configuration.Port;
         public int MaxPlayers => server.Configuration.MaximumConnections;
@@ -45,8 +47,14 @@ namespace ServerShared
             76561197968283536, // bennett
         };
 
+        private PluginManager pluginManager;
+        public PluginManager PluginManager => pluginManager;
+
         public GameServer(string name, int maxConnections, int port, bool listenServer, bool privateServer, bool requireSteamAuth, string configDirectory)
         {
+            Instance = this;
+            pluginManager = new PluginManager();
+
             if (maxConnections <= 0)
                 throw new ArgumentException("Max connections needs to be > 0.");
 
@@ -97,7 +105,11 @@ namespace ServerShared
                 Config = config;
                 Logger.LogDebug($"Loaded {Config.Bans.Count} bans.");
             }
-            
+
+            if (!System.IO.Directory.Exists("plugins"))
+                System.IO.Directory.CreateDirectory("plugins");
+            pluginManager.LoadPlugins(pluginManager.pluginPath);
+
             if (RequireSteamAuth)
             {
                 Logger.LogDebug("Enabling steam authentication...");
@@ -124,6 +136,8 @@ namespace ServerShared
 
         public void Stop()
         {
+            pluginManager?.UnloadPlugins();
+
             if (RequireSteamAuth)
             {
                 foreach (var player in Players.Values)
