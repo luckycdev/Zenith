@@ -12,6 +12,7 @@ namespace ServerShared
         public static readonly Color ColorGreen = new Color(0.48f, 0.74f, 0.45f);
         public static readonly Color ColorRed = new Color(0.74f, 0.48f, 0.45f);
         public static readonly Color ColorBlue = new Color(0.54f, 0.58f, 0.75f);
+        public static readonly Color ColorYellow = new Color(0.95f, 0.90f, 0.25f);
         public const float UpdateRate = 30;
         public const int MoveDataChannel = 1;
         public const string MasterServerUrl = "http://master.gettingoverit.mp";

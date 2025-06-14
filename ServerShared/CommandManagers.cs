@@ -6,7 +6,8 @@ namespace ServerShared
 {
     public class ChatCommandManager : BaseCommandManager<ChatCommand>
     {
-        public ChatCommandManager(GameServer server, Assembly executingAssembly) : base(server, prefix: "/", searchAssemblies: executingAssembly)
+        public ChatCommandManager(GameServer server, Assembly executingAssembly)
+            : base(server, prefix: "/", searchAssemblies: executingAssembly)
         {
         }
 
@@ -14,11 +15,17 @@ namespace ServerShared
         {
             CurrentCaller?.SendChatMessage(error, SharedConstants.ColorRed);
         }
+
+        public void RegisterPluginCommands(Assembly pluginAssembly)
+        {
+            RegisterCommandsFromAssembly(pluginAssembly);
+        }
     }
 
     public class ConsoleCommandManager : BaseCommandManager<BaseCommand>
     {
-        public ConsoleCommandManager(GameServer server, Assembly executingAssembly) : base(server, prefix: "", searchAssemblies: executingAssembly)
+        public ConsoleCommandManager(GameServer server, Assembly executingAssembly)
+            : base(server, prefix: "", searchAssemblies: executingAssembly)
         {
         }
 
@@ -28,6 +35,11 @@ namespace ServerShared
                 CurrentCaller.SendConsoleMessage(error, LogMessageType.Error);
             else
                 Logger.LogError(error);
+        }
+
+        public void RegisterPluginCommands(Assembly pluginAssembly)
+        {
+            RegisterCommandsFromAssembly(pluginAssembly);
         }
     }
 }

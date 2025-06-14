@@ -177,5 +177,10 @@ namespace ServerShared
         }
 
         protected abstract void OnParseError(object sender, string error);
+
+        public void RegisterCommandsFromAssembly(Assembly assembly)
+        {
+            LoadCommands(new[] { assembly });
+        }
     }
 }
