@@ -47,6 +47,9 @@ namespace ServerShared
             76561197968283536, // bennett
         };
 
+        public delegate void ChatMessageReceivedHandler(NetPlayer sender, string message);
+        public event ChatMessageReceivedHandler OnChatMessageReceived;
+
         private PluginManager pluginManager;
         public PluginManager PluginManager => pluginManager;
 
@@ -683,7 +686,9 @@ namespace ServerShared
                         Color color = Color.white;
                         BroadcastChatMessage(message, color, peerPlayer);
 
-                        break;
+                        OnChatMessageReceived?.Invoke(peerPlayer, message);
+
+                            break;
                     }
                     case MessageType.ClientStopSpectating:
                     {
