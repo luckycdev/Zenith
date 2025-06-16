@@ -50,13 +50,15 @@ namespace ServerShared
         public delegate void ChatMessageReceivedHandler(NetPlayer sender, string message);
         public event ChatMessageReceivedHandler OnChatMessageReceived;
 
-        private PluginManager pluginManager;
-        public PluginManager PluginManager => pluginManager;
+        public delegate void PlayerJoinedHandler(NetPlayer player);
+        public delegate void PlayerLeftHandler(NetPlayer player);
+        public event PlayerJoinedHandler OnPlayerJoined;
+        public event PlayerLeftHandler OnPlayerLeft;
+
 
         public GameServer(string name, int maxConnections, int port, bool listenServer, bool privateServer, bool requireSteamAuth, string configDirectory)
         {
             Instance = this;
-            pluginManager = new PluginManager();
 
             if (maxConnections <= 0)
                 throw new ArgumentException("Max connections needs to be > 0.");
@@ -97,7 +99,9 @@ namespace ServerShared
         public void Start()
         {
             server.Start();
-            
+
+            Logger.LogInfo($"[Zenith] Zenith version {SharedConstants.ZenithVersion} started (GOIMP version {SharedConstants.Version})");
+
             if (!PrivateServer)
             {
                 MasterServer.Start(this);
@@ -108,10 +112,6 @@ namespace ServerShared
                 Config = config;
                 Logger.LogDebug($"Loaded {Config.Bans.Count} bans.");
             }
-
-            if (!System.IO.Directory.Exists("plugins"))
-                System.IO.Directory.CreateDirectory("plugins");
-            pluginManager.LoadPlugins(pluginManager.pluginPath);
 
             if (RequireSteamAuth)
             {
@@ -135,11 +135,13 @@ namespace ServerShared
             }
 
             Running = true;
+
+            PluginManager.LoadPlugins();
         }
 
         public void Stop()
         {
-            pluginManager?.UnloadPlugins();
+            PluginManager.UnloadPlugins();
 
             if (RequireSteamAuth)
             {
@@ -615,6 +617,7 @@ namespace ServerShared
             Broadcast(writer, NetDeliveryMethod.ReliableOrdered, 0, connection);
 
             Logger.LogDebug($"Client with id {player.Id} is now spawned");
+            OnPlayerJoined?.Invoke(player);
             BroadcastChatMessage($"{player.Name} joined the server.", SharedConstants.ColorBlue, connection);
         }
 
@@ -644,6 +647,7 @@ namespace ServerShared
             }
 
             RemoveConnection(connection);
+            OnPlayerLeft?.Invoke(player);
             BroadcastChatMessage($"{player.Name} left the server.", SharedConstants.ColorBlue);
         }
 
