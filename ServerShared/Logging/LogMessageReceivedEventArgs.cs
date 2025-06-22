@@ -7,12 +7,14 @@ namespace ServerShared.Logging
         public LogMessageType Type;
         public object Message;
         public Exception Exception;
+        public ConsoleColor? CustomColor { get; set; }
 
-        public LogMessageReceivedEventArgs(LogMessageType type, object message, Exception exception = null)
+        public LogMessageReceivedEventArgs(LogMessageType type, object message, Exception exception = null, ConsoleColor? customColor = null)
         {
             Type = type;
             Message = message;
             Exception = exception;
+            CustomColor = customColor;
         }
     }
 }

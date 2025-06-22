@@ -5,7 +5,7 @@ namespace ServerShared
     public static class SharedConstants
     {
         public const string AppName = "GOIMP";
-        public const string ZenithVersion = "0.5";
+        public const string ZenithVersion = "0.6";
         public const int MaxNameLength = 30;
         public const int DefaultPort = 25050;
         public const int Version = 9;

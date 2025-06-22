@@ -6,6 +6,7 @@
         Debug,
         Warning,
         Error,
-        Exception
+        Exception,
+        Custom
     }
 }

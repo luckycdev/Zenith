@@ -43,12 +43,13 @@ namespace ServerShared.Plugins
                     {
                         if (typeof(IPlugin).IsAssignableFrom(type) && !type.IsAbstract)
                         {
+                            Logger.LogInfo($"[Zenith] Initializing plugin {type.FullName}");
                             try
                             {
                                 var plugin = (IPlugin)Activator.CreateInstance(type);
                                 plugin.Initialize();
                                 loadedPlugins.Add(plugin);
-                                Logger.LogInfo($"[Zenith] Loaded plugin: {plugin.Name} version {plugin.Version} by {plugin.Author}");
+                                Logger.LogInfo($"[Zenith] Loaded plugin {plugin.Name} version {plugin.Version} by {plugin.Author}");
                             }
                             catch (Exception ex)
                             {

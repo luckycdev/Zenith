@@ -12,7 +12,7 @@ namespace ServerShared.Commands.ConsoleCommands
         {
             if (args.Length == 0)
             {
-                SendMessage("[Zenith] Usage: 'plugins list', 'plugins reload' or 'plugins reload [plugin name]'", LogMessageType.Error);
+                SendMessage("[Zenith] Usage: 'plugins list', 'plugins reload', or 'plugins reload <plugin name>'", LogMessageType.Error);
                 return;
             }
 
@@ -28,15 +28,25 @@ namespace ServerShared.Commands.ConsoleCommands
                 }
 
                 SendMessage($"[Zenith] Loaded plugins: ({plugins.Count})", LogMessageType.Info);
-                foreach (var (name, version, author) in plugins)
-                    SendMessage($"[Zenith] - {name} version {version} by {author}", LogMessageType.Info);
+                foreach (var plugin in plugins)
+                {
+                    SendMessage($"[Zenith] - {plugin.Name} version {plugin.Version} by {plugin.Author}", LogMessageType.Info);
+                }
             }
             else if (subCommand == "reload")
             {
                 if (args.Length == 1)
                 {
                     PluginManager.ReloadAllPlugins();
-                    SendMessage($"[Zenith] Reloaded {PluginManager.GetLoadedPluginsCount()} plugin(s).", LogMessageType.Info);
+
+                    if (PluginManager.GetLoadedPluginsCount() == 1)
+                    {
+                        SendMessage($"[Zenith] Reloaded {PluginManager.GetLoadedPluginsCount()} plugin.", LogMessageType.Info);
+                    }
+                    else
+                    {
+                        SendMessage($"[Zenith] Reloaded {PluginManager.GetLoadedPluginsCount()} plugins.", LogMessageType.Info);
+                    }
                 }
                 else
                 {

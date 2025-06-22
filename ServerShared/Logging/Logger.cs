@@ -36,7 +36,12 @@ namespace ServerShared.Logging
             Log(null, LogMessageType.Info, ex);
         }
 
-        public static void Log(object msg, LogMessageType type, Exception ex = null)
+        public static void LogCustom(object msg, ConsoleColor color)
+        {
+            Log(msg, LogMessageType.Custom, color: color);
+        }
+
+        public static void Log(object msg, LogMessageType type, Exception ex = null, ConsoleColor? color = null)
         {
             switch (type)
             {
@@ -54,6 +59,10 @@ namespace ServerShared.Logging
                     break;
                 case LogMessageType.Exception:
                     LogMessageReceived?.Invoke(new LogMessageReceivedEventArgs(LogMessageType.Exception, msg ?? string.Empty, ex));
+                    break;
+                case LogMessageType.Custom:
+                    LogMessageReceived?.Invoke(new LogMessageReceivedEventArgs(
+                        LogMessageType.Custom, msg ?? string.Empty, null, color));
                     break;
             }
         }

@@ -88,6 +88,13 @@ namespace Server
 
                         PopForegroundColor();
                         break;
+
+                    case LogMessageType.Custom:
+                        var color = args.CustomColor ?? ConsoleColor.Gray;
+                        PushForegroundColor(color);
+                        WriteLine(args.Message);
+                        PopForegroundColor();
+                        break;
                 }
             }
         }
