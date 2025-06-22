@@ -21,6 +21,8 @@ namespace ServerShared.Commands.ConsoleCommands
                 builder.AppendLine($"- {player.Name} ({player.Identity})");
             }
 
+            builder.AppendLine($"Zenith Version {SharedConstants.ZenithVersion} (GOIMP Version {SharedConstants.Version}");
+
             SendMessage(builder.ToString().Trim(), LogMessageType.Info);
         }
     }
