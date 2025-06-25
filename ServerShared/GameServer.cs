@@ -54,6 +54,9 @@ namespace ServerShared
         public delegate void ChatMessageReceivedHandler(NetPlayer sender, string message);
         public event ChatMessageReceivedHandler OnChatMessageReceived;
 
+        public delegate string ChatMessageModifier(NetPlayer sender, string message);
+        public event ChatMessageModifier OnChatMessageModify;
+
         public delegate void PlayerJoinedHandler(NetPlayer player);
         public delegate void PlayerLeftHandler(NetPlayer player);
         public event PlayerJoinedHandler OnPlayerJoined;
@@ -210,6 +213,24 @@ namespace ServerShared
 
         public void BroadcastChatMessage(string message, Color color, int playerId, string playerName, NetConnection except = null)
         {
+            NetPlayer sender = null;
+            if(playerId != 0 && Players.Values.FirstOrDefault(p => p.Id == playerId) is NetPlayer plr)
+            {
+                sender = plr;
+            }
+
+            if (OnChatMessageModify != null)
+            {
+                foreach (ChatMessageModifier modifier in OnChatMessageModify.GetInvocationList())
+                {
+                    message = modifier.Invoke(sender, message);
+                    if (string.IsNullOrEmpty(message))
+                    {
+                        return;
+                    }
+                }
+            }
+
             var netMessage = server.CreateMessage();
             netMessage.Write(MessageType.ChatMessage);
             netMessage.Write(playerId);
