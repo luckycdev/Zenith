@@ -54,8 +54,10 @@ namespace ServerShared
         public delegate void ChatMessageReceivedHandler(NetPlayer sender, string message);
         public event ChatMessageReceivedHandler OnChatMessageReceived;
 
-        public delegate string ChatMessageModifier(NetPlayer sender, string message);
+        public delegate (string playerName, string message, Color color) ChatMessageModifier(NetPlayer sender, string playerName, string message, Color color);
         public event ChatMessageModifier OnChatMessageModify;
+
+        public event Action<string, string, Color> OnChatMessageFinal;
 
         public delegate void PlayerJoinedHandler(NetPlayer player);
         public delegate void PlayerLeftHandler(NetPlayer player);
@@ -223,12 +225,13 @@ namespace ServerShared
             {
                 foreach (ChatMessageModifier modifier in OnChatMessageModify.GetInvocationList())
                 {
-                    message = modifier.Invoke(sender, message);
+                    (playerName, message, color) = modifier.Invoke(sender, playerName, message, color);
                     if (string.IsNullOrEmpty(message))
                     {
                         return;
                     }
                 }
+                OnChatMessageFinal?.Invoke(playerName, message, color);
             }
 
             var netMessage = server.CreateMessage();

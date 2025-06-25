@@ -18,10 +18,10 @@ namespace ServerShared.Commands.ConsoleCommands
 
             foreach (var player in Server.Players.Values)
             {
-                builder.AppendLine($"- {player.Name} ({player.Identity})");
+                builder.AppendLine($"- {player.Name} ({player.Identity}) (Access Level: {player.AccessLevel})");
             }
 
-            builder.AppendLine($"Zenith Version {SharedConstants.ZenithVersion} (GOIMP Version {SharedConstants.Version}");
+            builder.AppendLine($"Zenith Version {SharedConstants.ZenithVersion} (GOIMP Version {SharedConstants.Version})");
 
             SendMessage(builder.ToString().Trim(), LogMessageType.Info);
         }
