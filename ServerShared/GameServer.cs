@@ -707,22 +707,23 @@ namespace ServerShared
                     }
                     case MessageType.ChatMessage:
                     {
-                        var message = netMessage.ReadString();
-
-                        message = message.Trim();
+                        var message = netMessage.ReadString().Trim();
 
                         if (message.Length > SharedConstants.MaxChatLength)
                             message = message.Substring(0, SharedConstants.MaxChatLength);
 
-                        if (ChatCommands.HandleMessage(peerPlayer, message))
-                            return;
-                        
+                        string command = ChatCommands.HandleMessage(peerPlayer, message);
+
+                        if (command != null)
+                            { 
+                                Logger.LogInfo($"{peerPlayer.Name} ran the command {command}");
+                                return;
+                            }
+
                         Color color = Color.white;
                         BroadcastChatMessage(message, color, peerPlayer);
-
                         OnChatMessageReceived?.Invoke(peerPlayer, message);
-
-                            break;
+                        break;
                     }
                     case MessageType.ClientStopSpectating:
                     {

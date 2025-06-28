@@ -35,12 +35,13 @@ namespace ServerShared
             LoadCommands(searchAssemblies.Concat(new[] {Assembly.GetExecutingAssembly()}));
         }
         
-        public bool HandleMessage(NetPlayer caller, string message)
+        public string HandleMessage(NetPlayer caller, string message)
         {
             CurrentCaller = caller;
-            bool result = Parser.Parse(message, caller, (int) (caller?.AccessLevel ?? AccessLevel.Console));
+            bool result = Parser.Parse(message, caller, (int)(caller?.AccessLevel ?? AccessLevel.Console));
             CurrentCaller = null;
-            return result;
+            if (!result) return null;
+            return message;
         }
 
         private void LoadCommands(IEnumerable<Assembly> assemblies)
