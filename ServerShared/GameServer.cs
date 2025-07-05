@@ -60,10 +60,20 @@ namespace ServerShared
         public event Action<string, string, Color> OnChatMessageFinal;
 
         public delegate void PlayerJoinedHandler(NetPlayer player);
-        public delegate void PlayerLeftHandler(NetPlayer player);
         public event PlayerJoinedHandler OnPlayerJoined;
+
+        public delegate (string message, Color color) JoinMessageModifier(NetPlayer player);
+        public event JoinMessageModifier OnJoinMessageModify;
+
+        public event Action<string, Color> OnJoinMessageFinal;
+
+        public delegate void PlayerLeftHandler(NetPlayer player);
         public event PlayerLeftHandler OnPlayerLeft;
 
+        public delegate (string message, Color color) LeaveMessageModifier(NetPlayer player);
+        public event LeaveMessageModifier OnLeaveMessageModify;
+
+        public event Action<string, Color> OnLeaveMessageFinal;
 
         public GameServer(string name, int maxConnections, int port, bool listenServer, bool privateServer, bool requireSteamAuth, string configDirectory)
         {
@@ -216,21 +226,27 @@ namespace ServerShared
         public void BroadcastChatMessage(string message, Color color, int playerId, string playerName, NetConnection except = null)
         {
             NetPlayer sender = null;
-            if(playerId != 0 && Players.Values.FirstOrDefault(p => p.Id == playerId) is NetPlayer plr)
+            if (playerId != 0 && Players.Values.FirstOrDefault(p => p.Id == playerId) is NetPlayer plr)
             {
                 sender = plr;
             }
+
+            bool wasModified = false;
 
             if (OnChatMessageModify != null)
             {
                 foreach (ChatMessageModifier modifier in OnChatMessageModify.GetInvocationList())
                 {
                     (playerName, message, color) = modifier.Invoke(sender, playerName, message, color);
-                    if (string.IsNullOrEmpty(message))
-                    {
-                        return;
-                    }
+                    wasModified = true;
                 }
+
+                // skip sending a msg if the modified msg is ""
+                if (wasModified && string.IsNullOrEmpty(message))
+                {
+                    return;
+                }
+
                 OnChatMessageFinal?.Invoke(playerName, message, color);
             }
 
@@ -240,7 +256,6 @@ namespace ServerShared
             netMessage.Write(playerName);
             netMessage.WriteRgbaColor(color);
             netMessage.Write(message);
-            netMessage.Write(netMessage);
 
             Broadcast(netMessage, NetDeliveryMethod.ReliableOrdered, 0, except);
 
@@ -498,10 +513,10 @@ namespace ServerShared
             NetPlayer player = FindPlayer(ipAddress);
 
             if (player != null)
-                UpdateAccessLevel(player);
+                UpdateAccessLevel(player); // TODO does this work? it doesnt change their accesslevel until they rejoin - havent tested steamid
         }
 
-        private void UpdateAccessLevel(NetPlayer player)
+        public void UpdateAccessLevel(NetPlayer player)
         {
             var identity = Config.AccessLevels.FirstOrDefault(id => id.Matches(player));
 
@@ -648,7 +663,27 @@ namespace ServerShared
 
             Logger.LogDebug($"Client with id {player.Id} is now spawned");
             OnPlayerJoined?.Invoke(player);
-            BroadcastChatMessage($"{player.Name} joined the server.", SharedConstants.ColorBlue, connection);
+
+            string joinMessage = $"{player.Name} joined the server.";
+            Color joinColor = SharedConstants.ColorBlue;
+
+            bool wasModified = false;
+
+            if (OnJoinMessageModify != null)
+            {
+                foreach (JoinMessageModifier modifier in OnJoinMessageModify.GetInvocationList())
+                {
+                    (joinMessage, joinColor) = modifier.Invoke(player);
+                    wasModified = true;
+                }
+            }
+
+            // skip sending a msg if the modified msg is ""
+            if (!wasModified || !string.IsNullOrEmpty(joinMessage))
+            {
+                OnJoinMessageFinal?.Invoke(joinMessage, joinColor);
+                BroadcastChatMessage(joinMessage, joinColor, connection);
+            }
         }
 
         private void OnConnectionDisconnected(object sender, DisconnectedEventArgs args)
@@ -678,7 +713,27 @@ namespace ServerShared
 
             RemoveConnection(connection);
             OnPlayerLeft?.Invoke(player);
-            BroadcastChatMessage($"{player.Name} left the server.", SharedConstants.ColorBlue);
+
+            string leaveMessage = $"{player.Name} left the server.";
+            Color leaveColor = SharedConstants.ColorBlue;
+
+            bool wasModified = false;
+
+            if (OnLeaveMessageModify != null)
+            {
+                foreach (LeaveMessageModifier modifier in OnLeaveMessageModify.GetInvocationList())
+                {
+                    (leaveMessage, leaveColor) = modifier.Invoke(player);
+                    wasModified = true;
+                }
+            }
+
+            // skip sending a msg if the modified msg is ""
+            if (!wasModified || !string.IsNullOrEmpty(leaveMessage))
+            {
+                OnLeaveMessageFinal?.Invoke(leaveMessage, leaveColor);
+                BroadcastChatMessage(leaveMessage, leaveColor);
+            }
         }
 
         private void OnReceiveData(object sender, DataReceivedEventArgs args)
