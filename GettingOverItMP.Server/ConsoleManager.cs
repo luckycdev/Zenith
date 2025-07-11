@@ -8,299 +8,220 @@ namespace Server
 {
     public static class ConsoleManager
     {
+        //TODO: console input line flickers on windows
+        //TODO: think about logging timestamp? idk if really needed
         public static Action<string> OnInput;
 
         private static Thread inputThread;
-        private static string currentInput = string.Empty;
-
-        private static readonly Stack<ConsoleColor> foregroundColorStack = new Stack<ConsoleColor>();
-        private static readonly Stack<ConsoleColor> backgroundColorStack = new Stack<ConsoleColor>();
         private static readonly List<string> history = new List<string>();
-        private static int historyPosition = 0; // 0 = oldest, higher = newer
-
-        private static readonly object consoleLock = new object();
+        private static int historyPosition = -1;
         private static bool isRunning;
+        private static readonly object consoleLock = new();
+
+        private static StringBuilder inputBuffer = new();
+        private static int cursorPosition = 0;
 
         public static void Initialize()
         {
             Console.InputEncoding = Encoding.UTF8;
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Clear();
 
             Logger.LogMessageReceived += OnLogMessageReceived;
-            isRunning = true;
-            inputThread = new Thread(DoInputThread);
-            inputThread.Start();
 
-            PushForegroundColor(ConsoleColor.DarkGreen); // Set default color to dark green
+            isRunning = true;
+
+            inputThread = new Thread(InputThreadLoop)
+            {
+                IsBackground = true
+            };
+            inputThread.Start();
         }
 
         public static void Destroy()
         {
             Logger.LogMessageReceived -= OnLogMessageReceived;
             isRunning = false;
-            PopForegroundColor();
 
-            foregroundColorStack.Clear();
-            backgroundColorStack.Clear();
-            history.Clear();
-        }
-
-        public static void Clear()
-        {
-            Console.Clear();
-            RedrawInput();
+            inputThread?.Join(500);
         }
 
         private static void OnLogMessageReceived(LogMessageReceivedEventArgs args)
         {
             lock (consoleLock)
             {
-                switch (args.Type)
+                Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+
+                var color = args.CustomColor ?? args.Type switch
                 {
-                    case LogMessageType.Info:
-                        PushForegroundColor(ConsoleColor.Gray);
-                        WriteLine(args.Message);
-                        PopForegroundColor();
-                        break;
-                    case LogMessageType.Debug:
-                        PushForegroundColor(ConsoleColor.Yellow);
-                        WriteLine(args.Message);
-                        PopForegroundColor();
-                        break;
-                    case LogMessageType.Warning:
-                        PushForegroundColor(ConsoleColor.DarkYellow);
-                        WriteLine(args.Message);
-                        PopForegroundColor();
-                        break;
-                    case LogMessageType.Error:
-                        PushForegroundColor(ConsoleColor.Red);
-                        WriteLine(args.Message);
-                        PopForegroundColor();
-                        break;
-                    case LogMessageType.Exception:
-                        PushForegroundColor(ConsoleColor.Red);
+                    LogMessageType.Info => ConsoleColor.Gray,
+                    LogMessageType.Debug => ConsoleColor.Yellow,
+                    LogMessageType.Warning => ConsoleColor.DarkYellow,
+                    LogMessageType.Error => ConsoleColor.Red,
+                    LogMessageType.Exception => ConsoleColor.Red,
+                    _ => ConsoleColor.Gray
+                };
 
-                        if (args.Message != null)
-                            WriteLine(args.Message);
+                var oldColor = Console.ForegroundColor;
+                Console.ForegroundColor = color;
 
-                        WriteException(args.Exception);
+                if (!string.IsNullOrEmpty(args.Message?.ToString()))
+                    Console.WriteLine(args.Message.ToString());
 
-                        PopForegroundColor();
-                        break;
+                if (args.Type == LogMessageType.Exception && args.Exception != null)
+                    Console.WriteLine(args.Exception.ToString());
 
-                    case LogMessageType.Custom:
-                        var color = args.CustomColor ?? ConsoleColor.Gray;
-                        PushForegroundColor(color);
-                        WriteLine(args.Message);
-                        PopForegroundColor();
-                        break;
-                }
+                Console.ForegroundColor = oldColor;
+
+                Console.Out.Flush();
+                Console.Error.Flush();
+
+                RedrawInputLine();
             }
         }
 
-        private static void WriteLine(object msg)
-        {
-            lock (consoleLock)
-            {
-                Console.WriteLine(msg);
-                RedrawInput();
-            }
-        }
-
-        private static void WriteException(Exception exception)
-        {
-            lock (consoleLock)
-            {
-                Console.WriteLine(exception);
-
-                if (exception.InnerException != null)
-                {
-                    PushForegroundColor(ConsoleColor.DarkRed);
-                    Console.Write("Inner: ");
-                    PopForegroundColor();
-                    WriteException(exception.InnerException);
-                }
-
-                RedrawInput();
-            }
-        }
-
-        private static void DoInputThread()
+        private static void InputThreadLoop()
         {
             while (isRunning)
             {
-                if (!WaitForKey(100, out var keyInfo))
-                    continue;
-
-                if (keyInfo.Key == ConsoleKey.Backspace)
-                {
-                    OnBackspace();
-                }
-                else if (keyInfo.Key == ConsoleKey.Enter)
-                {
-                    OnEnter();
-                }
-                else if (keyInfo.Key == ConsoleKey.Escape)
-                {
-                    currentInput = "";
-                }
-                else if (keyInfo.Key == ConsoleKey.UpArrow)
-                {
-                    if (history.Count > 0)
-                    {
-                        historyPosition -= 1;
-
-                        if (historyPosition < 0)
-                            historyPosition = 0;
-
-                        currentInput = history[historyPosition];
-                    }
-                }
-                else if (keyInfo.Key == ConsoleKey.DownArrow)
-                {
-                    if (history.Count > 0)
-                    {
-                        historyPosition += 1;
-
-                        if (historyPosition >= history.Count)
-                        {
-                            historyPosition = history.Count;
-                            currentInput = "";
-                        }
-                        else
-                        {
-                            currentInput = history[historyPosition];
-                        }
-                    }
-                }
-                else if (keyInfo.KeyChar != 0)
-                {
-                    currentInput += keyInfo.KeyChar;
-                }
-
-                RedrawInput();
-            }
-        }
-
-        private static bool WaitForKey(int ms, out ConsoleKeyInfo keyInfo)
-        {
-            int delay = 0;
-            while (delay < ms)
-            {
                 if (Console.KeyAvailable)
                 {
-                    keyInfo = Console.ReadKey(true);
-                    return true;
+                    var key = Console.ReadKey(intercept: true);
+
+                    lock (consoleLock)
+                    {
+                        switch (key.Key)
+                        {
+                            case ConsoleKey.Enter:
+                                {
+                                    string input = inputBuffer.ToString().Trim();
+
+                                    Console.WriteLine();
+                                    if (!string.IsNullOrEmpty(input))
+                                    {
+                                        OnInput?.Invoke(input);
+                                        history.Add(input);
+                                        if (history.Count > 1000)
+                                            history.RemoveAt(0);
+                                    }
+                                    inputBuffer.Clear();
+                                    cursorPosition = 0;
+                                    historyPosition = history.Count;
+                                    RedrawInputLine();
+                                    break;
+                                }
+                            case ConsoleKey.Backspace:
+                                {
+                                    if (cursorPosition > 0)
+                                    {
+                                        inputBuffer.Remove(cursorPosition - 1, 1);
+                                        cursorPosition--;
+                                        RedrawInputLine();
+                                    }
+                                    break;
+                                }
+                            case ConsoleKey.Delete:
+                                {
+                                    if (cursorPosition < inputBuffer.Length)
+                                    {
+                                        inputBuffer.Remove(cursorPosition, 1);
+                                        RedrawInputLine();
+                                    }
+                                    break;
+                                }
+                            case ConsoleKey.LeftArrow:
+                                {
+                                    if (cursorPosition > 0)
+                                    {
+                                        cursorPosition--;
+                                        SetCursorPos();
+                                    }
+                                    break;
+                                }
+                            case ConsoleKey.RightArrow:
+                                {
+                                    if (cursorPosition < inputBuffer.Length)
+                                    {
+                                        cursorPosition++;
+                                        SetCursorPos();
+                                    }
+                                    break;
+                                }
+                            case ConsoleKey.UpArrow:
+                                {
+                                    if (history.Count > 0 && historyPosition > 0)
+                                    {
+                                        historyPosition--;
+                                        inputBuffer.Clear();
+                                        inputBuffer.Append(history[historyPosition]);
+                                        cursorPosition = inputBuffer.Length;
+                                        RedrawInputLine();
+                                    }
+                                    break;
+                                }
+                            case ConsoleKey.DownArrow:
+                                {
+                                    if (history.Count == 0)
+                                        break;
+
+                                    if (historyPosition < history.Count - 1)
+                                    {
+                                        historyPosition++;
+                                        inputBuffer.Clear();
+                                        inputBuffer.Append(history[historyPosition]);
+                                    }
+                                    else
+                                    {
+                                        historyPosition = history.Count;
+                                        inputBuffer.Clear();
+                                    }
+                                    cursorPosition = inputBuffer.Length;
+                                    RedrawInputLine();
+                                    break;
+                                }
+                            default:
+                                {
+                                    if (!char.IsControl(key.KeyChar))
+                                    {
+                                        inputBuffer.Insert(cursorPosition, key.KeyChar);
+                                        cursorPosition++;
+                                        RedrawInputLine();
+                                    }
+                                    break;
+                                }
+                        }
+                    }
                 }
-                Thread.Sleep(15);
-                delay += 15;
-            }
-
-            keyInfo = default;
-            return false;
-        }
-
-        private static void OnBackspace()
-        {
-            if (currentInput.Length > 0)
-            {
-                currentInput = currentInput.Substring(0, currentInput.Length - 1);
-            }
-        }
-
-        private static void OnEnter()
-        {
-            if (currentInput.Length <= 0)
-                return;
-
-            lock (consoleLock)
-            {
-                int inputLine = Console.CursorTop;
-                Console.SetCursorPosition(0, inputLine);
-
-                PushForegroundColor(ConsoleColor.Green);
-                Console.Write(currentInput.PadRight(Console.WindowWidth - 1));
-                PopForegroundColor();
-
-                Console.WriteLine();
-
-                OnInput?.Invoke(currentInput);
-
-                if (history.Count > 1000)
-                    history.RemoveAt(0);
-
-                history.Add(currentInput);
-                historyPosition = history.Count;
-                currentInput = string.Empty;
-            }
-
-            RedrawInput();
-        }
-
-        private static void RedrawInput()
-        {
-            lock (consoleLock)
-            {
-                Console.CursorVisible = false; // Prevent flickering cursor
-
-                int inputLine = Console.CursorTop;
-                Console.SetCursorPosition(0, inputLine);
-                Console.Write(new string(' ', Console.WindowWidth));
-                Console.SetCursorPosition(0, inputLine);
-
-                string input = currentInput;
-
-                if (input.Length > Console.BufferWidth - 1)
+                else
                 {
-                    input = input.Substring(input.Length - (Console.BufferWidth - 1));
+                    Thread.Sleep(50);
+
+                    lock (consoleLock)
+                    {
+                        RedrawInputLine();
+                    }
                 }
-
-                PushForegroundColor(ConsoleColor.Green);
-                Console.Write($"{input}");
-                PopForegroundColor();
-
-                Console.CursorVisible = true;
             }
         }
 
-        public static void ClearLines(int numLines)
+        private static void RedrawInputLine()
         {
-            int targetTop = Console.CursorTop - numLines;
-            if (targetTop < 0) targetTop = 0;
+            Console.Write("\r");
+            Console.Write(new string(' ', Console.WindowWidth - 1));
+            Console.Write("\r> " + inputBuffer.ToString());
 
-            Console.SetCursorPosition(0, targetTop);
+            SetCursorPos();
+        }
 
-            for (int i = 0; i < numLines; i++)
+        private static void SetCursorPos()
+        {
+            int pos = 2 + cursorPosition;
+            try
             {
-                Console.Write(new string(' ', Console.WindowWidth));
-                if (i < numLines - 1)
-                    Console.WriteLine();
+                Console.SetCursorPosition(pos, Console.CursorTop);
             }
-
-            Console.SetCursorPosition(0, targetTop);
-        }
-
-        private static void PushForegroundColor(ConsoleColor color)
-        {
-            foregroundColorStack.Push(Console.ForegroundColor);
-            Console.ForegroundColor = color;
-        }
-
-        private static void PopForegroundColor()
-        {
-            Console.ForegroundColor = foregroundColorStack.Pop();
-        }
-
-        private static void PushBackgroundColor(ConsoleColor color)
-        {
-            backgroundColorStack.Push(Console.BackgroundColor);
-            Console.BackgroundColor = color;
-        }
-
-        private static void PopBackgroundColor()
-        {
-            Console.BackgroundColor = backgroundColorStack.Pop();
+            catch
+            {
+            }
         }
     }
 }

@@ -513,7 +513,7 @@ namespace ServerShared
             NetPlayer player = FindPlayer(ipAddress);
 
             if (player != null)
-                UpdateAccessLevel(player); // TODO does this work? it doesnt change their accesslevel until they rejoin - havent tested steamid
+                UpdateAccessLevel(player); // TODO: does this work? it doesnt change their accesslevel until they rejoin - havent tested steamid
         }
 
         public void UpdateAccessLevel(NetPlayer player)

@@ -1,5 +1,6 @@
 ﻿using Pyratron.Frameworks.Commands.Parser;
 using Server;
+using System;
 
 namespace GettingOverItMP.Server.ConsoleCommands
 {
@@ -8,7 +9,8 @@ namespace GettingOverItMP.Server.ConsoleCommands
     {
         public override void Handle(string[] args)
         {
-            ConsoleManager.Clear();
+            for (int i = 0; i < Console.WindowHeight; i++)
+                Console.WriteLine();
         }
     }
 }
