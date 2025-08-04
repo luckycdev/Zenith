@@ -14,6 +14,7 @@ using ServerShared.Plugins;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 
 namespace ServerShared
 {
@@ -833,26 +834,28 @@ namespace ServerShared
         {
             try
             {
+                var localVersionStrRaw = SharedConstants.ZenithVersion;
+                var localVersionStr = localVersionStrRaw.Split('-')[0]; // remove -beta from local version
+
                 using (var http = new HttpClient())
                 {
-                    var fileContent = await http.GetStringAsync("https://raw.githubusercontent.com/luckycdev/Zenith/main/ServerShared/SharedConstants.cs");
+                    http.DefaultRequestHeaders.UserAgent.TryParseAdd("request");
 
-                    var versionMatch = Regex.Match(
-                        fileContent,
-                        @"public\s+const\s+string\s+ZenithVersion\s*=\s*""([^""]+)"""
-                    );
+                    var response = await http.GetStringAsync("https://api.github.com/repos/luckycdev/zenith/tags");
+                    var tags = JsonSerializer.Deserialize<List<Tag>>(response);
 
-                    if (versionMatch.Success)
+                    if (tags != null && tags.Count > 0)
                     {
-                        var remoteVersionStr = versionMatch.Groups[1].Value;
-                        var localVersionStr = SharedConstants.ZenithVersion;
+                        var latestTag = tags[0].name;
+                        if (latestTag.StartsWith("v"))
+                            latestTag = latestTag.Substring(1); // remove v from github tag
 
-                        if (System.Version.TryParse(remoteVersionStr, out var remoteVersion) &&
-                            System.Version.TryParse(localVersionStr, out var localVersion))
+                        if (Version.TryParse(latestTag, out var remoteVersion) &&
+                            Version.TryParse(localVersionStr, out var localVersion))
                         {
                             if (remoteVersion > localVersion)
                             {
-                                Logger.LogCustom($"[Zenith] A newer version is available! Installed: {localVersion}, Latest: {remoteVersion}", ConsoleColor.Blue);
+                                Logger.LogCustom($"[Zenith] A newer version is available! Installed: {localVersionStrRaw}, Latest: {latestTag}", ConsoleColor.Blue);
                             }
                         }
                     }
@@ -860,8 +863,13 @@ namespace ServerShared
             }
             catch (Exception ex)
             {
-                Logger.LogError($"[GOICord] Error checking for new version: {ex}");
+                Logger.LogError($"[Zenith] Error checking for new version: {ex}");
             }
+        }
+
+        private class Tag
+        {
+            public string name { get; set; }
         }
     }
 }

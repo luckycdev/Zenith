@@ -16,5 +16,6 @@
   <ItemGroup>
     <PackageReference Include="Facepunch.Steamworks" Version="2.3.3" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageReference Include="System.Text.Json" Version="9.0.7" />
   </ItemGroup>
 </Project>
