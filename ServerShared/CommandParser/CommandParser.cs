@@ -183,19 +183,16 @@ namespace Pyratron.Frameworks.Commands.Parser
                 }
 
                 //Verify that the sender/user has permission to run this command.
-                if (command.AccessLevel > accessLevel)
+                if (!command.HasAccess(accessLevel, out string accessError))
                 {
-                    OnParseError(this,
-                        string.Format("Command '{0}' requires permission level {1}. (Currently only {2})", command.Name,
-                            command.AccessLevel, accessLevel));
+                    OnParseError(this, accessError);
                     return true;
                 }
 
-                //Verify the command can be run.
-                var canExecute = command.CanExecute(command);
-                if (!string.IsNullOrEmpty(canExecute))
+                var preExecuteError = command.CanExecute(command);
+                if (!string.IsNullOrEmpty(preExecuteError))
                 {
-                    OnParseError(this, canExecute);
+                    OnParseError(this, preExecuteError);
                     return true;
                 }
 
@@ -205,7 +202,10 @@ namespace Pyratron.Frameworks.Commands.Parser
                 var alias = inputArgs.ElementAt(0).ToLower(); //Preserve the alias typed in.
                 inputArgs.RemoveAt(0); //Remove the command name.
                 if (!ParseArguments(false, alias, command, command, inputArgs, returnArgs))
-                    command.Execute(returnArgs.ToArray(), inputArgs.ToArray(), data); //Execute the command.
+                {
+                    if (!command.TryExecute(returnArgs.ToArray(), inputArgs.ToArray(), data, accessLevel, out string executeError))
+                        OnParseError(this, executeError);
+                }
 
                 //Return argument values back to default.
                 ResetArgs(command);
@@ -262,7 +262,12 @@ namespace Pyratron.Frameworks.Commands.Parser
                 if (caller == null && command.RequireCaller)
                     continue;
 
-                if (caller != null && (int) caller.AccessLevel < command.AccessLevel)
+                int accessLevel = caller?.RankWeight ?? int.MaxValue;
+                if (!command.HasAccess(accessLevel, out _))
+                    continue;
+
+                var executeError = command.CanExecute(command);
+                if (!string.IsNullOrEmpty(executeError))
                     continue;
 
                 foreach (var alias in command.Aliases)

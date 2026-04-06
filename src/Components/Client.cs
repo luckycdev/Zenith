@@ -179,13 +179,13 @@ namespace Oxide.GettingOverItMP.Components
             }
 
             if (args.AdditionalInfo != null)
-                LastDisconnectReason += $"\n{args.AdditionalInfo}";
+                LastDisconnectReason += $" {args.AdditionalInfo}";
 
             string chatMessage = "Disconnected from the server";
 
             if (args.ReasonString != "bye")
             {
-                chatMessage = $"{chatMessage}:\n{LastDisconnectReason}";
+                chatMessage = $"{chatMessage}: {LastDisconnectReason}";
             }
             else
             {

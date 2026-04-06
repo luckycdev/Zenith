@@ -1,14 +1,19 @@
 ﻿using System.Text;
 using Pyratron.Frameworks.Commands.Parser;
 using ServerShared.Logging;
+using ServerShared.Player;
 
-namespace ServerShared.ChatCommands
+namespace ServerShared.Commands
 {
     [Command("Help", "help", "Shows all available commands and their descriptions.")]
-    public class HelpCommand : ChatCommand
+    [CommandPermission("zenith.help", AccessLevel.Player)]
+    public class HelpCommand : BaseCommand
     {
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             var builder = new StringBuilder();
 
             builder.AppendLine("Commands:");
@@ -17,7 +22,7 @@ namespace ServerShared.ChatCommands
             {
                 var command = Parser.Commands[i];
 
-                if (Caller != null && command.AccessLevel > (int) Caller.AccessLevel)
+                if (!Server.PlayerCommands.CanCurrentCallerRunCommand(command))
                     continue;
 
                 if (Caller == null && command.RequireCaller)

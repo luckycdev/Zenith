@@ -1,10 +1,12 @@
 ﻿using Pyratron.Frameworks.Commands.Parser;
+using ServerShared.Player;
 using UnityEngine;
 
-namespace ServerShared.Commands.ConsoleCommands
+namespace ServerShared.Commands
 {
     [Command("Exit", new[] { "exit", "quit" }, "Shutdown the server.")]
-    public class ExitCommand : ConsoleCommand
+    [CommandPermission("zenith.console.exit", AccessLevel.Console)]
+    public class ExitCommand : BaseCommand
     {
         public override void Handle(string[] args)
         {
@@ -13,7 +15,8 @@ namespace ServerShared.Commands.ConsoleCommands
     }
 
     [Command("Say", "say", "Send a chat message to all players.")]
-    public class SayCommand : ConsoleCommand
+    [CommandPermission("zenith.console.say", AccessLevel.Console)]
+    public class SayCommand : BaseCommand
     {
         public override void Handle(string[] args)
         {

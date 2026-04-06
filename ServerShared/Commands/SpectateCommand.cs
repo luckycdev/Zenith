@@ -4,17 +4,21 @@ using Pyratron.Frameworks.Commands.Parser;
 using ServerShared.Logging;
 using ServerShared.Player;
 
-namespace ServerShared.ChatCommands
+namespace ServerShared.Commands
 {
     [Command("Spectate by name", "spectate", "Start spectating another player by their name.")]
+    [CommandPermission("zenith.spectate.spectate", AccessLevel.Player)]
     [RequireCaller]
-    public class SpectateCommand : ChatCommand
+    public class SpectateCommand : BaseCommand
     {
         [CommandArgument("Player name")]
         public string PlayerName { get; set; }
-        
+
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             string lowerName = PlayerName.ToLower();
             NetPlayer target;
             List<NetPlayer> players = Server.FindPlayers(lowerName, NameSearchOption.Contains).Where(plr => !plr.Spectating).ToList();
@@ -44,14 +48,18 @@ namespace ServerShared.ChatCommands
     }
 
     [Command("Spectate by id", "spectateid", "Start spectating another player by their id.")]
+    [CommandPermission("zenith.spectate.spectateid", AccessLevel.Player)]
     [RequireCaller]
-    public class SpectateIdCommand : ChatCommand
+    public class SpectateIdCommand : BaseCommand
     {
         [CommandArgument("Player id")]
         public int PlayerId { get; set; }
 
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             NetPlayer target = Server.FindPlayer(PlayerId);
 
             if (target == null || target.Spectating)

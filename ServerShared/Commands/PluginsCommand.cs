@@ -2,11 +2,13 @@ using System.Linq;
 using Pyratron.Frameworks.Commands.Parser;
 using ServerShared.Plugins;
 using ServerShared.Logging;
+using ServerShared.Player;
 
-namespace ServerShared.Commands.ConsoleCommands
+namespace ServerShared.Commands
 {
     [Command("Plugins", new[] { "plugins" }, "Manage plugins (list or reload).")]
-    public class PluginsCommand : ConsoleCommand
+    [CommandPermission("zenith.console.plugins", AccessLevel.Console)]
+    public class PluginsCommand : BaseCommand
     {
         public override void Handle(string[] args)
         {

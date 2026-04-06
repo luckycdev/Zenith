@@ -38,16 +38,18 @@ namespace Pyratron.Frameworks.Commands.Parser
     }
 
     /// <summary>
-    /// Specifies that the command requires the specified access level or higher to use.
+    /// Declares the permission string and default access level for a command.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
-    public class RequireAuthAttribute : Attribute
+    public class CommandPermissionAttribute : Attribute
     {
-        public readonly AccessLevel AccessLevel;
+        public readonly string Permission;
+        public readonly AccessLevel DefaultAccessLevel;
 
-        public RequireAuthAttribute(AccessLevel accessLevel)
+        public CommandPermissionAttribute(string permission, AccessLevel defaultAccessLevel = AccessLevel.Player)
         {
-            AccessLevel = accessLevel;
+            Permission = permission;
+            DefaultAccessLevel = defaultAccessLevel;
         }
     }
 

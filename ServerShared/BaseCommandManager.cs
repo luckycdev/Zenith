@@ -11,6 +11,18 @@ namespace ServerShared
 {
     public abstract class BaseCommandManager<T> where T : BaseCommand
     {
+        class PermissionDefault
+        {
+            public readonly string Permission;
+            public readonly AccessLevel AccessLevel;
+
+            public PermissionDefault(string permission, AccessLevel accessLevel)
+            {
+                Permission = permission;
+                AccessLevel = accessLevel;
+            }
+        }
+
         class PropertyAttribute
         {
             public readonly PropertyInfo PropertyInfo;
@@ -26,21 +38,32 @@ namespace ServerShared
         protected readonly GameServer Server;
         protected readonly CommandParser Parser;
         protected NetPlayer CurrentCaller { get; private set; }
+        private readonly List<PermissionDefault> permissionDefaults = new List<PermissionDefault>();
+        private bool parseErrorOccurred;
         
         public BaseCommandManager(GameServer server, string prefix, params Assembly[] searchAssemblies)
         {
             Server = server;
             Parser = CommandParser.CreateNew(prefix);
-            Parser.OnError(OnParseError);
+            Parser.OnError(HandleParseError);
             LoadCommands(searchAssemblies.Concat(new[] {Assembly.GetExecutingAssembly()}));
+        }
+
+        private void HandleParseError(object sender, string error)
+        {
+            parseErrorOccurred = true;
+            OnParseError(sender, error);
         }
         
         public string HandleMessage(NetPlayer caller, string message)
         {
             CurrentCaller = caller;
-            bool result = Parser.Parse(message, caller, (int)(caller?.AccessLevel ?? AccessLevel.Console));
+            parseErrorOccurred = false;
+            int parserAccessLevel = caller?.RankWeight ?? Server?.Config?.Permissions?.GetRankWeight("Console") ?? (int)AccessLevel.Console;
+            bool result = Parser.Parse(message, caller, parserAccessLevel);
             CurrentCaller = null;
             if (!result) return null;
+            if (parseErrorOccurred) return string.Empty;
             return message;
         }
 
@@ -48,11 +71,12 @@ namespace ServerShared
         {
             var types = assemblies.SelectMany(assembly => assembly.GetExportedTypes()).ToList();
             Type commandBaseType = typeof(T);
+            bool permissionsChanged = false;
 
             foreach (Type type in types)
             {
                 var attribute = type.GetCustomAttributes(typeof(CommandAttribute), true).FirstOrDefault() as CommandAttribute;
-                var authAttribute = type.GetCustomAttributes(typeof(RequireAuthAttribute), true).FirstOrDefault() as RequireAuthAttribute;
+                var permissionAttribute = type.GetCustomAttributes(typeof(CommandPermissionAttribute), true).FirstOrDefault() as CommandPermissionAttribute;
                 var requireCallerAttribute = type.GetCustomAttributes(typeof(RequireCallerAttribute), true).FirstOrDefault() as RequireCallerAttribute;
 
                 if (attribute == null)
@@ -61,11 +85,47 @@ namespace ServerShared
                 if (!commandBaseType.IsAssignableFrom(type))
                     continue;
 
-                Parser.AddCommand(CommandFromAttribute(type, attribute, authAttribute, requireCallerAttribute != null));
+                AccessLevel defaultAccessLevel = permissionAttribute?.DefaultAccessLevel
+                    ?? AccessLevel.Player;
+
+                if (permissionAttribute != null
+                    && permissionDefaults.All(p => !p.Permission.Equals(permissionAttribute.Permission, StringComparison.OrdinalIgnoreCase)))
+                {
+                    permissionDefaults.Add(new PermissionDefault(permissionAttribute.Permission, permissionAttribute.DefaultAccessLevel));
+                }
+
+                if (permissionAttribute != null && Server?.Config?.Permissions != null)
+                    permissionsChanged |= Server.Config.Permissions.RegisterDefaultPermission(permissionAttribute.Permission, permissionAttribute.DefaultAccessLevel);
+
+                Parser.AddCommand(CommandFromAttribute(type, attribute, permissionAttribute, requireCallerAttribute != null));
             }
+
+            if (permissionsChanged && Server?.Config?.Permissions != null && !string.IsNullOrEmpty(Server.Config.Directory))
+                Server.Config.Permissions.Save(Server.Config.Directory);
         }
 
-        private Command CommandFromAttribute(Type type, CommandAttribute attribute, RequireAuthAttribute authAttribute, bool requireCaller)
+        private bool RegisterCollectedPermissionDefaults()
+        {
+            if (Server?.Config?.Permissions == null)
+                return false;
+
+            bool changed = false;
+            foreach (var permissionDefault in permissionDefaults)
+                changed |= Server.Config.Permissions.RegisterDefaultPermission(permissionDefault.Permission, permissionDefault.AccessLevel);
+
+            return changed;
+        }
+
+        public bool CanCurrentCallerRunCommand(Command command)
+        {
+            if (command == null)
+                return false;
+
+            var canExecute = command.CanExecute?.Invoke(command);
+            return string.IsNullOrEmpty(canExecute);
+        }
+
+        private Command CommandFromAttribute(Type type, CommandAttribute attribute, CommandPermissionAttribute permissionAttribute, bool requireCaller)
         {
             var command = new Command(Parser, attribute.FriendlyName, attribute.CommandNames.First(), attribute.Description);
             command.RequireCaller = requireCaller;
@@ -73,8 +133,22 @@ namespace ServerShared
             if (attribute.CommandNames.Length > 1)
                 command.AddAlias(attribute.CommandNames.Skip(1).ToArray());
 
-            if (authAttribute != null)
-                command.AccessLevel = (int)authAttribute.AccessLevel;
+            if (permissionAttribute != null)
+                command.AccessLevel = (int)permissionAttribute.DefaultAccessLevel;
+
+            if (permissionAttribute != null)
+            {
+                command.SetExecutePredicate(_ =>
+                {
+                    if (Server?.Config?.Permissions == null)
+                        return "No access to command.";
+
+                    string rankName = CurrentCaller?.RankName ?? "Console";
+                    return Server.Config.Permissions.HasPermission(rankName, permissionAttribute.Permission)
+                        ? string.Empty
+                        : "No access to command.";
+                });
+            }
 
             foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
@@ -98,8 +172,11 @@ namespace ServerShared
                 var instance = (BaseCommand) Activator.CreateInstance(type, true);
                 instance.Server = Server;
                 instance.Parser = Parser;
-                instance.Context = (this is ChatCommandManager) ? CommandContext.Chat : CommandContext.Console;
+                instance.Context = (this is PlayerCommandManager) ? CommandContext.Chat : CommandContext.Console;
                 instance.Caller = netPlayer;
+                instance.Permission = permissionAttribute?.Permission;
+                instance.PermissionDefaultAccessLevel = permissionAttribute?.DefaultAccessLevel
+                    ?? AccessLevel.Player;
                 
                 if (!PrepareInstance(instance, arguments, out string error))
                 {
@@ -182,6 +259,35 @@ namespace ServerShared
         public void RegisterCommandsFromAssembly(Assembly assembly)
         {
             LoadCommands(new[] { assembly });
+        }
+
+        public Command RegisterCommand(Command command, string permission, AccessLevel defaultAccessLevel = AccessLevel.Player)
+        {
+            if (command == null) throw new ArgumentNullException(nameof(command));
+            if (string.IsNullOrWhiteSpace(permission)) throw new ArgumentNullException(nameof(permission));
+
+            command.AccessLevel = (int)defaultAccessLevel;
+
+            if (permissionDefaults.All(p => !p.Permission.Equals(permission, StringComparison.OrdinalIgnoreCase)))
+                permissionDefaults.Add(new PermissionDefault(permission, defaultAccessLevel));
+
+            if (Server?.Config?.Permissions != null)
+            {
+                if (Server.Config.Permissions.RegisterDefaultPermission(permission, defaultAccessLevel) && !string.IsNullOrEmpty(Server.Config.Directory))
+                    Server.Config.Permissions.Save(Server.Config.Directory);
+            }
+
+            Parser.AddCommand(command);
+            return command;
+        }
+
+        public void SyncPermissionDefaults()
+        {
+            if (!RegisterCollectedPermissionDefaults())
+                return;
+
+            if (!string.IsNullOrEmpty(Server?.Config?.Directory))
+                Server.Config.Permissions.Save(Server.Config.Directory);
         }
     }
 }

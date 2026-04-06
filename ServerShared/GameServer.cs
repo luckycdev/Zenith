@@ -24,9 +24,9 @@ namespace ServerShared
         public string Name;
         public int Port => server.Configuration.Port;
         public int MaxPlayers => server.Configuration.MaximumConnections;
-        public readonly ChatCommandManager ChatCommands;
-        public readonly ConsoleCommandManager ConsoleCommands;
-        public List<PlayerBan> BannedPlayers => Config.Bans;
+        public readonly PlayerCommandManager PlayerCommands;
+        public readonly ServerCommandManager ServerCommands;
+        public List<PlayerBan> BannedPlayers => Config.PlayerData.Bans;
         public ServerConfig Config { get; private set; }
         public bool Running { get; private set; }
         public GameServerPeer Peer => server;
@@ -106,8 +106,8 @@ namespace ServerShared
             Name = name;
             RequireSteamAuth = requireSteamAuth;
             var callingAssembly = Assembly.GetCallingAssembly();
-            ChatCommands = new ChatCommandManager(this, callingAssembly);
-            ConsoleCommands = new ConsoleCommandManager(this, callingAssembly);
+            PlayerCommands = new PlayerCommandManager(this, callingAssembly);
+            ServerCommands = new ServerCommandManager(this, callingAssembly);
             ConfigDirectory = configDirectory;
 
             if (listenServer)
@@ -130,7 +130,9 @@ namespace ServerShared
             if (ServerConfig.LoadConfig(ConfigDirectory, out var config))
             {
                 Config = config;
-                Logger.LogDebug($"Loaded {Config.Bans.Count} bans.");
+                PlayerCommands.SyncPermissionDefaults();
+                ServerCommands.SyncPermissionDefaults();
+                Logger.LogDebug($"Loaded {Config.PlayerData.Bans.Count} bans.");
             }
 
             if (RequireSteamAuth)
@@ -284,41 +286,54 @@ namespace ServerShared
 
         public PlayerBan BanPlayer(NetPlayer player, string reason = null, DateTime? expirationDate = null)
         {
-            PlayerBan ban;
-
             if (SteamServer.IsValid)
-                ban = BanSteamId(player.SteamId, reason, expirationDate, player.Name);
-            else
-                ban = BanIp(player.Peer.RemoteEndPoint.Address, reason, expirationDate, player.Name);
+                return BanSteamId(player.SteamId, reason, expirationDate, player.Name);
 
-            KickConnection(player.Peer, DisconnectReason.Banned, ban.GetReasonWithExpiration());
-            return ban;
+            return BanIp(player.Peer.RemoteEndPoint.Address, reason, expirationDate, player.Name);
         }
 
         public PlayerBan BanIp(IPAddress ip, string reason = null, DateTime? expirationDate = null, string referenceName = null)
         {
-            Config.RemoveExpiredBans();
+            Config.PlayerData.RemoveExpiredBans();
 
             uint uintIp = ip.ToUint32();
             if (IpBanned(ip, out var existingBan))
+            {
+                foreach (var player in Players.Values.Where(plr => plr.Peer.RemoteEndPoint.Address.Equals(ip)).ToList())
+                    KickConnection(player.Peer, DisconnectReason.Banned, existingBan.GetReasonWithExpiration());
+
                 return existingBan;
+            }
 
             PlayerBan ban = new PlayerBan(uintIp, reason, expirationDate, referenceName);
             BannedPlayers.Add(ban);
             Config.Save();
+
+            foreach (var player in Players.Values.Where(plr => plr.Peer.RemoteEndPoint.Address.Equals(ip)).ToList())
+                KickConnection(player.Peer, DisconnectReason.Banned, ban.GetReasonWithExpiration());
+
             return ban;
         }
 
         public PlayerBan BanSteamId(ulong steamId, string reason = null, DateTime? expirationDate = null, string referenceName = null)
         {
-            Config.RemoveExpiredBans();
+            Config.PlayerData.RemoveExpiredBans();
 
             if (SteamIdBanned(steamId, out var existingBan))
+            {
+                foreach (var player in Players.Values.Where(plr => plr.SteamId == steamId).ToList())
+                    KickConnection(player.Peer, DisconnectReason.Banned, existingBan.GetReasonWithExpiration());
+
                 return existingBan;
+            }
 
             PlayerBan ban = new PlayerBan(steamId, reason, expirationDate, referenceName);
             BannedPlayers.Add(ban);
             Config.Save();
+
+            foreach (var player in Players.Values.Where(plr => plr.SteamId == steamId).ToList())
+                KickConnection(player.Peer, DisconnectReason.Banned, ban.GetReasonWithExpiration());
+
             return ban;
         }
 
@@ -464,67 +479,119 @@ namespace ServerShared
 
         public void KickConnection(NetConnection connection, DisconnectReason reason, string additionalInfo = null)
         {
+            if (reason == DisconnectReason.Invalid && !string.IsNullOrWhiteSpace(additionalInfo))
+            {
+                connection.Disconnect(additionalInfo);
+                return;
+            }
+
             connection.Disconnect(reason, additionalInfo);
         }
 
         public void SetAccessLevel(ulong steamId, AccessLevel accessLevel)
         {
-            if (accessLevel == AccessLevel.Player)
-            {
-                Config.AccessLevels.RemoveAll(id => id.Type == IdentityType.SteamId && id.SteamId == steamId);
-                Config.Save();
-                return;
-            }
-
-            var identity = Config.AccessLevels.FirstOrDefault(id => id.Type == IdentityType.SteamId && id.SteamId == steamId) ?? new PlayerAccessLevelIdentity(steamId, accessLevel);
-            identity.AccessLevel = accessLevel;
-
-            if (!Config.AccessLevels.Contains(identity))
-            {
-                Config.AccessLevels.Add(identity);
-            }
-
-            Config.Save();
-            NetPlayer player = FindPlayer(steamId);
-
-            if (player != null)
-                UpdateAccessLevel(player);
+            SetAccessLevel(steamId, accessLevel == AccessLevel.Player ? "Default" : accessLevel.ToString());
         }
 
-        public void SetAccessLevel(IPAddress ipAddress, AccessLevel accessLevel)
+        public void SetAccessLevel(ulong steamId, string rankName)
         {
-            uint uintIp = ipAddress.ToUint32();
+            bool isDefaultRank = string.IsNullOrWhiteSpace(rankName) || rankName.Equals("Default", StringComparison.OrdinalIgnoreCase) || rankName.Equals("Player", StringComparison.OrdinalIgnoreCase);
 
-            if (accessLevel == AccessLevel.Player)
+            if (isDefaultRank)
             {
-                Config.AccessLevels.RemoveAll(id => id.Type == IdentityType.Ip && id.Ip == uintIp);
+                Config.PlayerData.AccessLevels.RemoveAll(id => id.Type == IdentityType.SteamId && id.SteamId == steamId);
                 Config.Save();
+                
+                // Update access level for all connected players matching this Steam ID
+                foreach (var player in Players.Values.Where(p => p.SteamId == steamId))
+                {
+                    UpdateAccessLevel(player);
+                }
                 return;
             }
 
-            var identity = Config.AccessLevels.FirstOrDefault(id => id.Type == IdentityType.Ip && id.Ip == uintIp) ?? new PlayerAccessLevelIdentity(uintIp, accessLevel);
-            identity.AccessLevel = accessLevel;
+            var mappedAccessLevel = Config.Permissions.GetMappedAccessLevel(rankName);
+            var identity = Config.PlayerData.AccessLevels.FirstOrDefault(id => id.Type == IdentityType.SteamId && id.SteamId == steamId)
+                ?? new PlayerAccessLevelIdentity(steamId, rankName, mappedAccessLevel);
+            identity.RankName = rankName;
+            identity.AccessLevel = mappedAccessLevel;
 
-            if (!Config.AccessLevels.Contains(identity))
+            if (!Config.PlayerData.AccessLevels.Contains(identity))
             {
-                Config.AccessLevels.Add(identity);
+                Config.PlayerData.AccessLevels.Add(identity);
             }
 
             Config.Save();
-            NetPlayer player = FindPlayer(ipAddress);
+            
+            // Update access level for all connected players matching this Steam ID
+            foreach (var player in Players.Values.Where(p => p.SteamId == steamId))
+            {
+                UpdateAccessLevel(player);
+            }
+        }
 
-            if (player != null)
-                UpdateAccessLevel(player); // TODO: does this work? it doesnt change their accesslevel until they rejoin - havent tested steamid
+        public void SetAccessLevel(IPAddress ipAddress, AccessLevel accessLevel, string playerName = null)
+        {
+            SetAccessLevel(ipAddress, accessLevel == AccessLevel.Player ? "Default" : accessLevel.ToString(), playerName);
+        }
+
+        public void SetAccessLevel(IPAddress ipAddress, string rankName, string playerName = null)
+        {
+            uint uintIp = ipAddress.ToUint32();
+            bool hasPlayerName = !string.IsNullOrWhiteSpace(playerName);
+            bool isDefaultRank = string.IsNullOrWhiteSpace(rankName) || rankName.Equals("Default", StringComparison.OrdinalIgnoreCase) || rankName.Equals("Player", StringComparison.OrdinalIgnoreCase);
+
+            if (isDefaultRank)
+            {
+                Config.PlayerData.AccessLevels.RemoveAll(id => id.Type == IdentityType.Ip
+                    && id.Ip == uintIp
+                    && (!hasPlayerName || (!string.IsNullOrWhiteSpace(id.Name) && id.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase))));
+                Config.Save();
+                
+                // Update access level for all connected players matching this IP (and name when specified)
+                foreach (var player in Players.Values.Where(p => p.Peer.RemoteEndPoint.Address.ToUint32() == uintIp
+                    && (!hasPlayerName || p.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase))))
+                {
+                    UpdateAccessLevel(player);
+                }
+                return;
+            }
+
+            var mappedAccessLevel = Config.Permissions.GetMappedAccessLevel(rankName);
+            var identity = Config.PlayerData.AccessLevels.FirstOrDefault(id => id.Type == IdentityType.Ip
+                && id.Ip == uintIp
+                && (!hasPlayerName || (!string.IsNullOrWhiteSpace(id.Name) && id.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase))))
+                ?? new PlayerAccessLevelIdentity(uintIp, playerName, rankName, mappedAccessLevel);
+
+            if (hasPlayerName)
+                identity.Name = playerName;
+
+            identity.RankName = rankName;
+            identity.AccessLevel = mappedAccessLevel;
+
+            if (!Config.PlayerData.AccessLevels.Contains(identity))
+            {
+                Config.PlayerData.AccessLevels.Add(identity);
+            }
+
+            Config.Save();
+            
+            // Update access level for all connected players matching this IP (and name when specified)
+            foreach (var player in Players.Values.Where(p => p.Peer.RemoteEndPoint.Address.ToUint32() == uintIp
+                && (!hasPlayerName || p.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase))))
+            {
+                UpdateAccessLevel(player);
+            }
         }
 
         public void UpdateAccessLevel(NetPlayer player)
         {
-            var identity = Config.AccessLevels.FirstOrDefault(id => id.Matches(player));
+            var identity = Config.PlayerData.AccessLevels.FirstOrDefault(id => id.Matches(player));
 
             if (identity == null)
                 player.SetAccessLevel(AccessLevel.Player);
             else
-                player.SetAccessLevel(identity.AccessLevel);
+                player.SetAccessLevel(identity.GetRankName(), identity.AccessLevel);
         }
 
         private void OnConnectionConnected(object sender, ConnectedEventArgs args)
@@ -768,13 +835,16 @@ namespace ServerShared
                         if (message.Length > SharedConstants.MaxChatLength)
                             message = message.Substring(0, SharedConstants.MaxChatLength);
 
-                        string command = ChatCommands.HandleMessage(peerPlayer, message);
+                        string command = PlayerCommands.HandleMessage(peerPlayer, message);
 
                         if (command != null)
-                            { 
+                        {
+                            if (!string.IsNullOrWhiteSpace(command))
                                 Logger.LogInfo($"{peerPlayer.Name} ran the command {command}");
-                                return;
-                            }
+                            else
+                                Logger.LogInfo($"{peerPlayer.Name} attempted command {message}");
+                            return;
+                        }
 
                         Color color = Color.white;
                         BroadcastChatMessage(message, color, peerPlayer);

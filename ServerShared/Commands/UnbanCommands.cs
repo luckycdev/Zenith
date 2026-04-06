@@ -4,17 +4,20 @@ using Pyratron.Frameworks.Commands.Parser;
 using ServerShared.Logging;
 using ServerShared.Player;
 
-namespace ServerShared.ChatCommands
+namespace ServerShared.Commands
 {
     [Command("Unban by name", "unban", "Unban a player with the specified name. The name must partially match the same name that was used when the player was banned.")]
-    [RequireAuth(AccessLevel.Moderator)]
-    public class UnbanNameCommand : ChatCommand
+    [CommandPermission("zenith.unban.unban", AccessLevel.Moderator)]
+    public class UnbanNameCommand : BaseCommand
     {
         [CommandArgument("Player name")]
         public string PlayerName { get; set; }
 
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             var bans = Server.FindBansByName(PlayerName).ToList();
 
             if (bans.Count == 0)
@@ -36,14 +39,17 @@ namespace ServerShared.ChatCommands
     }
 
     [Command("Unban by steam id", "unbanid", "Unban a steam id.")]
-    [RequireAuth(AccessLevel.Moderator)]
-    public class UnbanSteamIdCommand : ChatCommand
+    [CommandPermission("zenith.unban.unbanid", AccessLevel.Moderator)]
+    public class UnbanSteamIdCommand : BaseCommand
     {
         [CommandArgument("Steam id")]
         public ulong SteamId { get; set; }
 
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             if (!Server.UnbanSteamId(SteamId))
             {
                 SendMessage("Could not find a ban matching the specified steam id. Make sure you enter the steamID64 format.", LogMessageType.Error);
@@ -55,14 +61,17 @@ namespace ServerShared.ChatCommands
     }
 
     [Command("Unban by IP", "unbanip", "Unban an IP.")]
-    [RequireAuth(AccessLevel.Moderator)]
-    public class UnbanIpCommand : ChatCommand
+    [CommandPermission("zenith.unban.unbanip", AccessLevel.Moderator)]
+    public class UnbanIpCommand : BaseCommand
     {
         [CommandArgument("IP")]
         public string IP { get; set; }
 
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             if (!IPAddress.TryParse(IP, out var ipAddress))
             {
                 SendMessage("The specified IP is not valid.", LogMessageType.Error);

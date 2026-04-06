@@ -52,7 +52,7 @@ namespace Server
             while (Server.Running)
             {
                 while (queuedCommandInputs.Count > 0)
-                    Server.ConsoleCommands.HandleMessage(null, queuedCommandInputs.Dequeue());
+                    Server.ServerCommands.HandleMessage(null, queuedCommandInputs.Dequeue());
 
                 if (!Server.Running)
                     continue;

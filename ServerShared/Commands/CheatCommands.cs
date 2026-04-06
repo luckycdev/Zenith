@@ -3,11 +3,11 @@ using ServerShared.Logging;
 using ServerShared.Player;
 using UnityEngine;
 
-namespace ServerShared.Commands.ChatCommands
+namespace ServerShared.Commands
 {
     [Command("Set goldness", "goldness", "Set yours or someone elses pot's goldness.")]
-    [RequireAuth(AccessLevel.Moderator)]
-    public class SetGoldnessChatCommand : ChatCommand
+    [CommandPermission("zenith.cheat.goldness", AccessLevel.Moderator)]
+    public class SetGoldnessCommand : BaseCommand
     {
         [CommandArgument("Goldness")]
         public float Goldness { get; set; }
@@ -17,6 +17,9 @@ namespace ServerShared.Commands.ChatCommands
 
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             Goldness = Mathf.Clamp01(Goldness);
             NetPlayer target = Caller;
 
@@ -48,8 +51,8 @@ namespace ServerShared.Commands.ChatCommands
     }
 
     [Command("Set pot color", "potcolor", "Set yours or someone elses pot's color.")]
-    [RequireAuth(AccessLevel.Moderator)]
-    public class SetPotColorChatCommand : ChatCommand
+    [CommandPermission("zenith.cheat.potcolor", AccessLevel.Moderator)]
+    public class SetPotColorCommand : BaseCommand
     {
         [CommandArgument("Red (0-1)")]
         public float R { get; set; }
@@ -65,6 +68,9 @@ namespace ServerShared.Commands.ChatCommands
 
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             NetPlayer target = Caller;
 
             if (PlayerName != null)

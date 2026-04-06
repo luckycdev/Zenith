@@ -5,10 +5,10 @@ using Pyratron.Frameworks.Commands.Parser;
 using ServerShared.Logging;
 using ServerShared.Player;
 
-namespace ServerShared.ChatCommands
+namespace ServerShared.Commands
 {
     [Command("Ban by player id", "banid", "Ban the player with the specified id for an optional amount of time in minutes.")]
-    [RequireAuth(AccessLevel.Moderator)]
+    [CommandPermission("zenith.ban.banid", AccessLevel.Moderator)]
     public class BanIdCommand : BaseBanCommand
     {
         [CommandArgument("Player id")]
@@ -22,6 +22,9 @@ namespace ServerShared.ChatCommands
 
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             var banTarget = Server.FindPlayer(PlayerId);
 
             if (banTarget == null)
@@ -32,7 +35,7 @@ namespace ServerShared.ChatCommands
 
             if (!VerifyArgs(Reason, Minutes))
                 return;
-            
+
             Reason = Reason?.Trim('\"'); // Temporary workaround for quote tags being included in argument string.
 
             if (Caller != null && banTarget == Caller)
@@ -41,19 +44,19 @@ namespace ServerShared.ChatCommands
                 return;
             }
 
-            if (Caller != null && banTarget.AccessLevel > Caller.AccessLevel)
+            if (Caller != null && banTarget.RankWeight > Caller.RankWeight)
             {
                 SendMessage("You can't ban someone with a higher access level than yourself.", LogMessageType.Error);
                 return;
             }
 
-            Server.BanPlayer(banTarget, Reason, Minutes != 0 ? DateTime.UtcNow.AddMinutes(Minutes) : (DateTime?) null);
+            Server.BanPlayer(banTarget, Reason, Minutes != 0 ? DateTime.UtcNow.AddMinutes(Minutes) : (DateTime?)null);
             AnnounceBan(banTarget, Minutes);
         }
     }
 
     [Command("Ban by steam id", "bansteamid", "Ban the specified steam id for an optional amount of time in minutes.")]
-    [RequireAuth(AccessLevel.Moderator)]
+    [CommandPermission("zenith.ban.bansteamid", AccessLevel.Moderator)]
     public class BanSteamIdCommand : BaseBanCommand
     {
         [CommandArgument("Steam id")]
@@ -67,12 +70,15 @@ namespace ServerShared.ChatCommands
 
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             if (!VerifyArgs(Reason, Minutes))
                 return;
 
             Reason = Reason?.Trim('\"'); // Temporary workaround for quote tags being included in argument string.
 
-            if (Caller != null && SteamId  == Caller.SteamId)
+            if (Caller != null && SteamId == Caller.SteamId)
             {
                 SendMessage("You can't ban yourself.", LogMessageType.Error);
                 return;
@@ -81,21 +87,24 @@ namespace ServerShared.ChatCommands
             if (Caller != null)
             {
                 // Check if steam id has higher access level than caller.
-                var existingUser = Server.Config.AccessLevels.FirstOrDefault(identity => identity.Type == IdentityType.SteamId && identity.SteamId == SteamId);
+                var existingUser = Server.Config.PlayerData.AccessLevels.FirstOrDefault(identity => identity.Type == IdentityType.SteamId && identity.SteamId == SteamId);
 
-                if (existingUser != null && existingUser.AccessLevel > Caller.AccessLevel)
+                if (existingUser != null)
                 {
-                    SendMessage("You can't ban someone with a higher access level than yourself.", LogMessageType.Error);
-                    return;
+                    int existingWeight = Server.Config.Permissions.GetRankWeight(existingUser.GetRankName());
+                    if (existingWeight > Caller.RankWeight)
+                    {
+                        SendMessage("You can't ban someone with a higher access level than yourself.", LogMessageType.Error);
+                        return;
+                    }
                 }
             }
 
-            var ban = Server.BanSteamId(SteamId, Reason, Minutes != 0 ? DateTime.UtcNow.AddMinutes(Minutes) : (DateTime?) null);
+            var ban = Server.BanSteamId(SteamId, Reason, Minutes != 0 ? DateTime.UtcNow.AddMinutes(Minutes) : (DateTime?)null);
             var player = Server.FindPlayer(SteamId);
 
             if (player != null)
             {
-                Server.KickConnection(player.Peer, DisconnectReason.Banned, ban.GetReasonWithExpiration());
                 AnnounceBan(player, Minutes);
             }
 
@@ -104,7 +113,7 @@ namespace ServerShared.ChatCommands
     }
 
     [Command("Ban by IP", "banip", "Ban the specified ip for an optional amount of time in minutes.")]
-    [RequireAuth(AccessLevel.Admin)]
+    [CommandPermission("zenith.ban.banip", AccessLevel.Admin)]
     public class BanIpCommand : BaseBanCommand
     {
         [CommandArgument("Steam id")]
@@ -118,6 +127,9 @@ namespace ServerShared.ChatCommands
 
         public override void Handle(string[] args)
         {
+            if (!HasAccess())
+                return;
+
             if (!VerifyArgs(Reason, Minutes))
                 return;
 
@@ -129,12 +141,11 @@ namespace ServerShared.ChatCommands
                 return;
             }
 
-            var ban = Server.BanIp(ipAddress, Reason, Minutes != 0 ? DateTime.UtcNow.AddMinutes(Minutes) : (DateTime?) null);
+            var ban = Server.BanIp(ipAddress, Reason, Minutes != 0 ? DateTime.UtcNow.AddMinutes(Minutes) : (DateTime?)null);
             var player = Server.FindPlayer(ipAddress);
 
             if (player != null)
             {
-                Server.KickConnection(player.Peer, DisconnectReason.Banned, ban.GetReasonWithExpiration());
                 AnnounceBan(player, Minutes);
             }
 
@@ -142,7 +153,7 @@ namespace ServerShared.ChatCommands
         }
     }
 
-    public abstract class BaseBanCommand : ChatCommand
+    public abstract class BaseBanCommand : BaseCommand
     {
         protected bool VerifyArgs(string reason, int minutes)
         {

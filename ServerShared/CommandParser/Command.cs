@@ -271,6 +271,53 @@ namespace Pyratron.Frameworks.Commands.Parser
         }
 
         /// <summary>
+        /// Checks whether the supplied access level can run this command.
+        /// </summary>
+        /// <param name="accessLevel">The caller's access level.</param>
+        /// <param name="error">Returns an error message if access is denied.</param>
+        /// <returns>True if the caller can run the command; otherwise false.</returns>
+        public bool HasAccess(int accessLevel, out string error)
+        {
+            if (AccessLevel <= accessLevel)
+            {
+                error = null;
+                return true;
+            }
+
+            error = "No access to command.";
+            return false;
+        }
+
+        /// <summary>
+        /// Runs the command only if the caller has enough access.
+        /// </summary>
+        /// <param name="arguments">The parsed input.</param>
+        /// <param name="rawArgs">The raw string arguments.</param>
+        /// <param name="data">Optional data to be passed to the command.</param>
+        /// <param name="accessLevel">The caller's access level.</param>
+        /// <param name="error">Returns an error message if the command cannot be executed.</param>
+        /// <returns>True if the command ran successfully; otherwise false.</returns>
+        public bool TryExecute(Argument[] arguments, string[] rawArgs, object data, int accessLevel, out string error)
+        {
+            if (Action == null)
+                throw new InvalidOperationException("The command's action must be defined before calling it.");
+
+            if (!HasAccess(accessLevel, out error))
+                return false;
+
+            var canExecute = CanExecute(this);
+            if (!string.IsNullOrEmpty(canExecute))
+            {
+                error = canExecute;
+                return false;
+            }
+
+            Action(arguments, data, rawArgs);
+            error = null;
+            return true;
+        }
+
+        /// <summary>
         /// Sets the rule that determines if the command can be executed.
         /// The function should return an error message if the command cannot be executed. Function is called before the command
         /// arguments are parsed.

@@ -21,6 +21,8 @@ namespace ServerShared.Player
         public Color PotColor { get; private set; } = Color.white;
         public PlayerAccessLevelIdentity Identity { get; private set; }
         public AccessLevel AccessLevel => Identity.AccessLevel;
+        public string RankName => Identity.GetRankName();
+        public int RankWeight => server?.Config?.Permissions?.GetRankWeight(RankName) ?? (int)AccessLevel;
 
         private GameServer server;
 
@@ -161,7 +163,13 @@ namespace ServerShared.Player
         public void SetAccessLevel(AccessLevel accessLevel)
         {
             Identity.AccessLevel = accessLevel;
-            Logger.LogInfo($"{Name} access level set to {AccessLevel}.");
+            Identity.RankName = accessLevel == AccessLevel.Player ? "Default" : accessLevel.ToString();
+        }
+
+        public void SetAccessLevel(string rankName, AccessLevel mappedAccessLevel)
+        {
+            Identity.RankName = rankName;
+            Identity.AccessLevel = mappedAccessLevel;
         }
 
         private void BroadcastPotProperties()

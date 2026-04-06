@@ -4,9 +4,9 @@ using ServerShared.Logging;
 
 namespace ServerShared
 {
-    public class ChatCommandManager : BaseCommandManager<ChatCommand>
+    public class PlayerCommandManager : BaseCommandManager<BaseCommand>
     {
-        public ChatCommandManager(GameServer server, Assembly executingAssembly)
+        public PlayerCommandManager(GameServer server, Assembly executingAssembly)
             : base(server, prefix: "/", searchAssemblies: executingAssembly)
         {
         }
@@ -22,9 +22,9 @@ namespace ServerShared
         }
     }
 
-    public class ConsoleCommandManager : BaseCommandManager<BaseCommand>
+    public class ServerCommandManager : BaseCommandManager<BaseCommand>
     {
-        public ConsoleCommandManager(GameServer server, Assembly executingAssembly)
+        public ServerCommandManager(GameServer server, Assembly executingAssembly)
             : base(server, prefix: "", searchAssemblies: executingAssembly)
         {
         }

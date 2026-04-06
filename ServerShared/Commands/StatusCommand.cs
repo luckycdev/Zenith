@@ -2,11 +2,13 @@
 using System.Text;
 using Pyratron.Frameworks.Commands.Parser;
 using ServerShared.Logging;
+using ServerShared.Player;
 
-namespace ServerShared.Commands.ConsoleCommands
+namespace ServerShared.Commands
 {
     [Command("Status", "status", "Show server status and connected players.")]
-    public class StatusCommand : ConsoleCommand
+    [CommandPermission("zenith.console.status", AccessLevel.Console)]
+    public class StatusCommand : BaseCommand
     {
         public override void Handle(string[] args)
         {
@@ -18,7 +20,7 @@ namespace ServerShared.Commands.ConsoleCommands
 
             foreach (var player in Server.Players.Values)
             {
-                builder.AppendLine($"- {player.Name} ({player.Identity}) (Access Level: {player.AccessLevel})");
+                builder.AppendLine($"- {player.Name} ({player.Identity}) (Access Level: {player.RankName})");
             }
 
             builder.AppendLine($"Zenith Version {SharedConstants.ZenithVersion} (GOIMP Version {SharedConstants.Version})");

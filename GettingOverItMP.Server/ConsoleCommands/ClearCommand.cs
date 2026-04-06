@@ -5,7 +5,7 @@ using System;
 namespace GettingOverItMP.Server.ConsoleCommands
 {
     [Command("Clear", "clear", "Clear the console.")]
-    public class ClearCommand : ConsoleCommand
+    public class ClearCommand : BaseCommand
     {
         public override void Handle(string[] args)
         {
