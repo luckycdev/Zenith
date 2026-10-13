@@ -6,7 +6,7 @@ using ServerShared.Player;
 namespace ServerShared.Commands
 {
     [Command("Kick by name", "kick", "Kick a player by name with an optional reason.")]
-    [CommandPermission("zenith.kick.kick", AccessLevel.Moderator)]
+    [CommandPermission("zenith.kick.kick", DefaultRanks.Moderator)]
     public class KickCommand : BaseCommand
     {
         [CommandArgument("Player name")]
@@ -44,7 +44,7 @@ namespace ServerShared.Commands
 
             if (Caller != null && target.RankWeight > Caller.RankWeight)
             {
-                SendMessage("You can't kick someone with a higher access level than yourself.", LogMessageType.Error);
+                SendMessage("You can't kick someone with a higher rank than yourself.", LogMessageType.Error);
                 return;
             }
 
@@ -65,7 +65,7 @@ namespace ServerShared.Commands
     }
 
     [Command("Kick by id", "kickid", "Kick a player by id with an optional reason.")]
-    [CommandPermission("zenith.kick.kickid", AccessLevel.Moderator)]
+    [CommandPermission("zenith.kick.kickid", DefaultRanks.Moderator)]
     public class KickIdCommand : BaseCommand
     {
         [CommandArgument("Player id")]
@@ -95,7 +95,7 @@ namespace ServerShared.Commands
 
             if (Caller != null && target.RankWeight > Caller.RankWeight)
             {
-                SendMessage("You can't kick someone with a higher access level than yourself.", LogMessageType.Error);
+                SendMessage("You can't kick someone with a higher rank than yourself.", LogMessageType.Error);
                 return;
             }
 

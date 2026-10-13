@@ -122,7 +122,7 @@ namespace ServerShared
         };
 
         public List<PlayerBan> Bans { get; private set; } = new List<PlayerBan>();
-        public List<PlayerAccessLevelIdentity> AccessLevels { get; private set; } = new List<PlayerAccessLevelIdentity>();
+        public List<PlayerRankIdentity> PlayerRanks { get; private set; } = new List<PlayerRankIdentity>();
 
         public PlayerDataStore() { }
 

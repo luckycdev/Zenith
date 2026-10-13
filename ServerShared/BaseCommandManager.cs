@@ -14,12 +14,12 @@ namespace ServerShared
         class PermissionDefault
         {
             public readonly string Permission;
-            public readonly AccessLevel AccessLevel;
+            public readonly string DefaultRank;
 
-            public PermissionDefault(string permission, AccessLevel accessLevel)
+            public PermissionDefault(string permission, string defaultRank)
             {
                 Permission = permission;
-                AccessLevel = accessLevel;
+                DefaultRank = defaultRank;
             }
         }
 
@@ -39,32 +39,60 @@ namespace ServerShared
         protected readonly CommandParser Parser;
         protected NetPlayer CurrentCaller { get; private set; }
         private readonly List<PermissionDefault> permissionDefaults = new List<PermissionDefault>();
-        private bool parseErrorOccurred;
-        
+        private readonly Dictionary<Command, string> commandPermissions = new Dictionary<Command, string>();
+
+        // State of the message currently being handled.
+        private string currentInput;
+        private CommandStatus? currentFailure;
+        private string currentError;
+
         public BaseCommandManager(GameServer server, string prefix, params Assembly[] searchAssemblies)
         {
             Server = server;
             Parser = CommandParser.CreateNew(prefix);
             Parser.OnError(HandleParseError);
+            Parser.CommandNotFound += _ => SetFailure(CommandStatus.NotFound);
+            Parser.CommandRejected += (command, _) =>
+            {
+                if (commandPermissions.TryGetValue(command, out string permission) && !CurrentCallerHasPermission(permission))
+                    SetFailure(CommandStatus.NoPermission);
+            };
             LoadCommands(searchAssemblies.Concat(new[] {Assembly.GetExecutingAssembly()}));
         }
 
         private void HandleParseError(object sender, string error)
         {
-            parseErrorOccurred = true;
+            SetFailure(CommandStatus.Failed);
+
+            if (currentError == null)
+                currentError = error;
+
             OnParseError(sender, error);
         }
-        
-        public string HandleMessage(NetPlayer caller, string message)
+
+        // The first failure reason wins (e.g. "no permission" stays even though an error message follows it).
+        private void SetFailure(CommandStatus status)
+        {
+            if (currentFailure == null)
+                currentFailure = status;
+        }
+
+        /// <summary>The message shown when the caller doesn't have permission to run what they typed.</summary>
+        private string NoPermissionMessage => $"You do not have permission to run the command '{currentInput}'.";
+
+        public CommandResult HandleMessage(NetPlayer caller, string message)
         {
             CurrentCaller = caller;
-            parseErrorOccurred = false;
-            int parserAccessLevel = caller?.RankWeight ?? Server?.Config?.Permissions?.GetRankWeight("Console") ?? (int)AccessLevel.Console;
-            bool result = Parser.Parse(message, caller, parserAccessLevel);
+            currentInput = message?.Trim();
+            currentFailure = null;
+            currentError = null;
+
+            bool isCommand = Parser.Parse(message, caller);
+            var result = new CommandResult(isCommand ? currentFailure ?? CommandStatus.Ran : CommandStatus.NotACommand, currentInput, currentError);
+
             CurrentCaller = null;
-            if (!result) return null;
-            if (parseErrorOccurred) return string.Empty;
-            return message;
+            currentInput = null;
+            return result;
         }
 
         private void LoadCommands(IEnumerable<Assembly> assemblies)
@@ -78,6 +106,7 @@ namespace ServerShared
                 var attribute = type.GetCustomAttributes(typeof(CommandAttribute), true).FirstOrDefault() as CommandAttribute;
                 var permissionAttribute = type.GetCustomAttributes(typeof(CommandPermissionAttribute), true).FirstOrDefault() as CommandPermissionAttribute;
                 var requireCallerAttribute = type.GetCustomAttributes(typeof(RequireCallerAttribute), true).FirstOrDefault() as RequireCallerAttribute;
+                bool consoleOnly = type.GetCustomAttributes(typeof(ConsoleOnlyAttribute), true).Any();
 
                 if (attribute == null)
                     continue;
@@ -85,19 +114,30 @@ namespace ServerShared
                 if (!commandBaseType.IsAssignableFrom(type))
                     continue;
 
-                AccessLevel defaultAccessLevel = permissionAttribute?.DefaultAccessLevel
-                    ?? AccessLevel.Player;
+                // Players can never run console-only commands, so don't even register them for chat.
+                if (consoleOnly && this is PlayerCommandManager)
+                    continue;
 
-                if (permissionAttribute != null
-                    && permissionDefaults.All(p => !p.Permission.Equals(permissionAttribute.Permission, StringComparison.OrdinalIgnoreCase)))
+                var permissions = type.GetCustomAttributes(typeof(RegisterPermissionAttribute), true)
+                    .Cast<RegisterPermissionAttribute>()
+                    .Select(extra => new PermissionDefault(extra.Permission, extra.DefaultRank))
+                    .ToList();
+
+                if (permissionAttribute != null)
+                    permissions.Insert(0, new PermissionDefault(permissionAttribute.Permission, permissionAttribute.DefaultRank));
+
+                foreach (var permission in permissions)
                 {
-                    permissionDefaults.Add(new PermissionDefault(permissionAttribute.Permission, permissionAttribute.DefaultAccessLevel));
+                    if (permissionDefaults.All(p => !p.Permission.Equals(permission.Permission, StringComparison.OrdinalIgnoreCase)))
+                        permissionDefaults.Add(permission);
+
+                    if (Server?.Config?.Permissions != null)
+                        permissionsChanged |= Server.Config.Permissions.RegisterDefaultPermission(permission.Permission, permission.DefaultRank);
                 }
 
-                if (permissionAttribute != null && Server?.Config?.Permissions != null)
-                    permissionsChanged |= Server.Config.Permissions.RegisterDefaultPermission(permissionAttribute.Permission, permissionAttribute.DefaultAccessLevel);
-
-                Parser.AddCommand(CommandFromAttribute(type, attribute, permissionAttribute, requireCallerAttribute != null));
+                var command = CommandFromAttribute(type, attribute, permissionAttribute, requireCallerAttribute != null);
+                command.ConsoleOnly = consoleOnly;
+                Parser.AddCommand(command);
             }
 
             if (permissionsChanged && Server?.Config?.Permissions != null && !string.IsNullOrEmpty(Server.Config.Directory))
@@ -111,9 +151,42 @@ namespace ServerShared
 
             bool changed = false;
             foreach (var permissionDefault in permissionDefaults)
-                changed |= Server.Config.Permissions.RegisterDefaultPermission(permissionDefault.Permission, permissionDefault.AccessLevel);
+                changed |= Server.Config.Permissions.RegisterDefaultPermission(permissionDefault.Permission, permissionDefault.DefaultRank);
 
             return changed;
+        }
+
+        /// <summary>
+        /// Returns true if the current caller has the specified permission node.
+        /// The server console (no caller) can always run every command.
+        /// </summary>
+        public bool CurrentCallerHasPermission(string permission)
+        {
+            if (CurrentCaller == null)
+                return true;
+
+            if (Server?.Config?.Permissions == null)
+                return false;
+
+            return Server.Config.Permissions.HasPermission(CurrentCaller.RankName, permission);
+        }
+
+        /// <summary>
+        /// Gates a command behind a permission node. Access is decided by the caller's rank in permissions.json
+        /// (including inherited ranks). Rank weight is not used for permissions.
+        /// </summary>
+        private void ApplyPermission(Command command, string permission)
+        {
+            commandPermissions[command] = permission;
+
+            var existingPredicate = command.CanExecute;
+            command.SetExecutePredicate(cmd =>
+            {
+                if (!CurrentCallerHasPermission(permission))
+                    return NoPermissionMessage;
+
+                return existingPredicate?.Invoke(cmd) ?? string.Empty;
+            });
         }
 
         public bool CanCurrentCallerRunCommand(Command command)
@@ -134,21 +207,7 @@ namespace ServerShared
                 command.AddAlias(attribute.CommandNames.Skip(1).ToArray());
 
             if (permissionAttribute != null)
-                command.AccessLevel = (int)permissionAttribute.DefaultAccessLevel;
-
-            if (permissionAttribute != null)
-            {
-                command.SetExecutePredicate(_ =>
-                {
-                    if (Server?.Config?.Permissions == null)
-                        return "No access to command.";
-
-                    string rankName = CurrentCaller?.RankName ?? "Console";
-                    return Server.Config.Permissions.HasPermission(rankName, permissionAttribute.Permission)
-                        ? string.Empty
-                        : "No access to command.";
-                });
-            }
+                ApplyPermission(command, permissionAttribute.Permission);
 
             foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
@@ -175,8 +234,9 @@ namespace ServerShared
                 instance.Context = (this is PlayerCommandManager) ? CommandContext.Chat : CommandContext.Console;
                 instance.Caller = netPlayer;
                 instance.Permission = permissionAttribute?.Permission;
-                instance.PermissionDefaultAccessLevel = permissionAttribute?.DefaultAccessLevel
-                    ?? AccessLevel.Player;
+                instance.PermissionDefaultRank = permissionAttribute?.DefaultRank ?? DefaultRanks.Member;
+                instance.Input = currentInput;
+                instance.PermissionDenied = () => SetFailure(CommandStatus.NoPermission);
                 
                 if (!PrepareInstance(instance, arguments, out string error))
                 {
@@ -261,19 +321,23 @@ namespace ServerShared
             LoadCommands(new[] { assembly });
         }
 
-        public Command RegisterCommand(Command command, string permission, AccessLevel defaultAccessLevel = AccessLevel.Player)
+        /// <summary>
+        /// Registers a manually built command behind a permission node. The default rank gets the permission
+        /// in permissions.json the first time it's registered.
+        /// </summary>
+        public Command RegisterCommand(Command command, string permission, string defaultRank = DefaultRanks.Member)
         {
             if (command == null) throw new ArgumentNullException(nameof(command));
             if (string.IsNullOrWhiteSpace(permission)) throw new ArgumentNullException(nameof(permission));
 
-            command.AccessLevel = (int)defaultAccessLevel;
+            ApplyPermission(command, permission);
 
             if (permissionDefaults.All(p => !p.Permission.Equals(permission, StringComparison.OrdinalIgnoreCase)))
-                permissionDefaults.Add(new PermissionDefault(permission, defaultAccessLevel));
+                permissionDefaults.Add(new PermissionDefault(permission, defaultRank));
 
             if (Server?.Config?.Permissions != null)
             {
-                if (Server.Config.Permissions.RegisterDefaultPermission(permission, defaultAccessLevel) && !string.IsNullOrEmpty(Server.Config.Directory))
+                if (Server.Config.Permissions.RegisterDefaultPermission(permission, defaultRank) && !string.IsNullOrEmpty(Server.Config.Directory))
                     Server.Config.Permissions.Save(Server.Config.Directory);
             }
 

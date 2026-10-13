@@ -8,7 +8,7 @@ using ServerShared.Player;
 namespace ServerShared.Commands
 {
     [Command("Ban by player id", "banid", "Ban the player with the specified id for an optional amount of time in minutes.")]
-    [CommandPermission("zenith.ban.banid", AccessLevel.Moderator)]
+    [CommandPermission("zenith.ban.banid", DefaultRanks.Moderator)]
     public class BanIdCommand : BaseBanCommand
     {
         [CommandArgument("Player id")]
@@ -46,7 +46,7 @@ namespace ServerShared.Commands
 
             if (Caller != null && banTarget.RankWeight > Caller.RankWeight)
             {
-                SendMessage("You can't ban someone with a higher access level than yourself.", LogMessageType.Error);
+                SendMessage("You can't ban someone with a higher rank than yourself.", LogMessageType.Error);
                 return;
             }
 
@@ -56,7 +56,7 @@ namespace ServerShared.Commands
     }
 
     [Command("Ban by steam id", "bansteamid", "Ban the specified steam id for an optional amount of time in minutes.")]
-    [CommandPermission("zenith.ban.bansteamid", AccessLevel.Moderator)]
+    [CommandPermission("zenith.ban.bansteamid", DefaultRanks.Moderator)]
     public class BanSteamIdCommand : BaseBanCommand
     {
         [CommandArgument("Steam id")]
@@ -86,15 +86,15 @@ namespace ServerShared.Commands
 
             if (Caller != null)
             {
-                // Check if steam id has higher access level than caller.
-                var existingUser = Server.Config.PlayerData.AccessLevels.FirstOrDefault(identity => identity.Type == IdentityType.SteamId && identity.SteamId == SteamId);
+                // Check if steam id has a higher rank than caller.
+                var existingUser = Server.Config.PlayerData.PlayerRanks.FirstOrDefault(identity => identity.Type == IdentityType.SteamId && identity.SteamId == SteamId);
 
                 if (existingUser != null)
                 {
                     int existingWeight = Server.Config.Permissions.GetRankWeight(existingUser.GetRankName());
                     if (existingWeight > Caller.RankWeight)
                     {
-                        SendMessage("You can't ban someone with a higher access level than yourself.", LogMessageType.Error);
+                        SendMessage("You can't ban someone with a higher rank than yourself.", LogMessageType.Error);
                         return;
                     }
                 }
@@ -113,10 +113,10 @@ namespace ServerShared.Commands
     }
 
     [Command("Ban by IP", "banip", "Ban the specified ip for an optional amount of time in minutes.")]
-    [CommandPermission("zenith.ban.banip", AccessLevel.Admin)]
+    [CommandPermission("zenith.ban.banip", DefaultRanks.Admin)]
     public class BanIpCommand : BaseBanCommand
     {
-        [CommandArgument("Steam id")]
+        [CommandArgument("IP")]
         public string IP { get; set; }
 
         [CommandArgument("Ban length", optional: true, defaultValue: "0")]
@@ -139,6 +139,26 @@ namespace ServerShared.Commands
             {
                 SendMessage("Invalid ip specified.", LogMessageType.Error);
                 return;
+            }
+
+            if (Caller != null)
+            {
+                if (Caller.Peer.RemoteEndPoint.Address.Equals(ipAddress))
+                {
+                    SendMessage("You can't ban yourself.", LogMessageType.Error);
+                    return;
+                }
+
+                uint uintIp = ipAddress.ToUint32();
+                bool targetsHigherRank = Server.Players.Values.Any(plr => plr.Peer.RemoteEndPoint.Address.Equals(ipAddress) && plr.RankWeight > Caller.RankWeight)
+                    || Server.Config.PlayerData.PlayerRanks.Any(identity => identity.Type == IdentityType.Ip && identity.Ip == uintIp
+                        && Server.Config.Permissions.GetRankWeight(identity.GetRankName()) > Caller.RankWeight);
+
+                if (targetsHigherRank)
+                {
+                    SendMessage("You can't ban someone with a higher rank than yourself.", LogMessageType.Error);
+                    return;
+                }
             }
 
             var ban = Server.BanIp(ipAddress, Reason, Minutes != 0 ? DateTime.UtcNow.AddMinutes(Minutes) : (DateTime?)null);

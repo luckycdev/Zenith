@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Collections.Generic;
+using System.Text;
 using Pyratron.Frameworks.Commands.Parser;
 using ServerShared.Logging;
 using ServerShared.Player;
@@ -6,7 +7,7 @@ using ServerShared.Player;
 namespace ServerShared.Commands
 {
     [Command("Help", "help", "Shows all available commands and their descriptions.")]
-    [CommandPermission("zenith.help", AccessLevel.Player)]
+    [CommandPermission("zenith.help", DefaultRanks.Member)]
     public class HelpCommand : BaseCommand
     {
         public override void Handle(string[] args)
@@ -14,25 +15,26 @@ namespace ServerShared.Commands
             if (!HasAccess())
                 return;
 
-            var builder = new StringBuilder();
+            var lines = new List<string>();
 
-            builder.AppendLine("Commands:");
-
-            for (int i = 0; i < Parser.Commands.Count; ++i)
+            foreach (var command in Parser.Commands)
             {
-                var command = Parser.Commands[i];
-
-                if (!Server.PlayerCommands.CanCurrentCallerRunCommand(command))
-                    continue;
-
                 if (Caller == null && command.RequireCaller)
                     continue;
 
-                builder.Append($"{command.Name} [{string.Join(", ", command.Aliases.ToArray())}]: {command.Description}");
+                if (Caller != null && command.ConsoleOnly)
+                    continue;
 
-                if (i < Parser.Commands.Count - 1)
-                    builder.AppendLine();
+                // Only list commands the caller's rank is allowed to run (checks the command's permission node).
+                if (!string.IsNullOrEmpty(command.CanExecute?.Invoke(command)))
+                    continue;
+
+                lines.Add($"{command.Name} [{string.Join(", ", command.Aliases.ToArray())}]: {command.Description}");
             }
+
+            var builder = new StringBuilder();
+            builder.AppendLine("Commands:");
+            builder.Append(string.Join("\n", lines));
 
             SendMessage(builder.ToString(), LogMessageType.Info);
         }

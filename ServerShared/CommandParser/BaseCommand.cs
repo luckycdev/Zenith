@@ -13,21 +13,28 @@ namespace Pyratron.Frameworks.Commands.Parser
         public CommandParser Parser { get; set; }
         public NetPlayer Caller { get; set; }
         public string Permission { get; set; }
-        public AccessLevel PermissionDefaultAccessLevel { get; set; } = AccessLevel.Player;
+        public string PermissionDefaultRank { get; set; } = DefaultRanks.Member;
+
+        /// <summary>The full command as the caller typed it.</summary>
+        public string Input { get; set; }
+
+        /// <summary>Called when a permission check in this command fails, so the command manager can report it.</summary>
+        public Action PermissionDenied { get; set; }
 
         public abstract void Handle(string[] args);
 
         /// <summary>
         /// Checks whether the current caller has access to the command's declared permission.
+        /// Commands without a permission can be run by everyone.
         /// </summary>
         /// <param name="denyMessage">Optional message to send when access is denied.</param>
         /// <returns>True if the caller has access; otherwise false.</returns>
         protected bool HasAccess(string denyMessage = null)
         {
-            if (!string.IsNullOrWhiteSpace(Permission))
-                return HasAccess(Permission, denyMessage);
+            if (string.IsNullOrWhiteSpace(Permission))
+                return true;
 
-            return HasAccess(PermissionDefaultAccessLevel, denyMessage);
+            return HasAccess(Permission, denyMessage);
         }
 
         /// <summary>
@@ -38,31 +45,18 @@ namespace Pyratron.Frameworks.Commands.Parser
         /// <returns>True if the caller has access; otherwise false.</returns>
         protected bool HasAccess(string permission, string denyMessage = null)
         {
-            if (Server?.Config?.Permissions == null)
-                return false;
+            // The server console can always run every command.
+            if (Caller == null)
+                return true;
 
-            var rankName = Caller?.RankName ?? "Console";
-            bool allowed = Server.Config.Permissions.HasPermission(rankName, permission);
-
-            if (!allowed)
-                SendMessage(string.IsNullOrEmpty(denyMessage) ? "No access to command." : denyMessage, LogMessageType.Error);
-
-            return allowed;
-        }
-
-        /// <summary>
-        /// Checks whether the current caller has access to a required access level.
-        /// </summary>
-        /// <param name="requiredAccessLevel">The minimum access level required.</param>
-        /// <param name="denyMessage">Optional message to send when access is denied.</param>
-        /// <returns>True if the caller has access; otherwise false.</returns>
-        protected bool HasAccess(AccessLevel requiredAccessLevel, string denyMessage = null)
-        {
-            var currentAccessLevel = Caller?.AccessLevel ?? AccessLevel.Console;
-            bool allowed = currentAccessLevel >= requiredAccessLevel;
+            bool allowed = Server?.Config?.Permissions != null
+                && Server.Config.Permissions.HasPermission(Caller.RankName, permission);
 
             if (!allowed)
-                SendMessage(string.IsNullOrEmpty(denyMessage) ? "No access to command." : denyMessage, LogMessageType.Error);
+            {
+                PermissionDenied?.Invoke();
+                SendMessage(string.IsNullOrEmpty(denyMessage) ? $"You do not have permission to run the command '{Input}'." : denyMessage, LogMessageType.Error);
+            }
 
             return allowed;
         }

@@ -99,6 +99,12 @@ namespace Pyratron.Frameworks.Commands.Parser
         /// <remarks>
         /// Ideally used to display an error message if the command entered encounters an error.
         /// </remarks>
+        /// <summary>Called with the typed command name when no command matches it.</summary>
+        public event Action<string> CommandNotFound;
+
+        /// <summary>Called when a matching command's <c>CanExecute</c> rejects the caller (e.g. missing permission).</summary>
+        public event Action<Command, string> CommandRejected;
+
         public CommandParser OnError(Action<object, string> callback)
         {
             ParseError += new ParseErrorHandler(callback);
@@ -115,14 +121,13 @@ namespace Pyratron.Frameworks.Commands.Parser
         /// Use <c>Arguments[].FromName(...)</c> to get the values of the parsed arguments in the command action.
         /// </remarks>
         /// <param name="input">A string inputted by a user. If the string does not start with the parser prefix, it will return false, otherwise it will parse the command.</param>
-        /// <param name="accessLevel">An optional level to limit executing commands if the user doesn't have permission.</param>
         /// <returns>
         /// True if the input is non-empty and starts with the <c>Prefix</c>.
         /// If the input does not start with a prefix, it returns false so the message can be processed further. (As a chat message, for example)
         /// </returns>
-        public bool Parse(string input, int accessLevel = 0)
+        public bool Parse(string input)
         {
-            return Parse(input, null, accessLevel);
+            return Parse(input, null);
         }
 
         /// <summary>
@@ -136,18 +141,18 @@ namespace Pyratron.Frameworks.Commands.Parser
         /// </remarks>
         /// <param name="data">Data to pass to the command. This data can be used by the command when it is executed.</param>
         /// <param name="input">A string inputted by a user. If the string does not start with the parser prefix, it will return false, otherwise it will parse the command.</param>
-        /// <param name="accessLevel">An optional level to limit executing commands if the user doesn't have permission.</param>
         /// <returns>
         /// True if the input is non-empty and starts with the <c>Prefix</c>.
         /// If the input does not start with a prefix, it returns false so the message can be processed further. (As a chat message, for example)
         /// </returns>
-        public bool Parse(string input, object data, int accessLevel = 0)
+        public bool Parse(string input, object data)
         {
             if (string.IsNullOrEmpty(input))
                 return false;
 
             //Remove the prefix from the input and trim it just in case.
             input = input.Trim();
+            string typedInput = input; // Everything the caller typed, including the prefix.
             if (!string.IsNullOrEmpty(Prefix))
             {
                 var index = input.IndexOf(Prefix, StringComparison.OrdinalIgnoreCase);
@@ -170,7 +175,7 @@ namespace Pyratron.Frameworks.Commands.Parser
             var commands = Commands.Where(cmd => cmd.Aliases.Any(alias => alias.Equals(inputArgs[0]))).ToList();
 
             if (commands.Count == 0) //If no commands found found.
-                NoCommandsFound(inputArgs, data as NetPlayer);
+                NoCommandsFound(typedInput, inputArgs, data as NetPlayer);
             else
             {
                 var command = commands.First(); //Find command.
@@ -182,16 +187,18 @@ namespace Pyratron.Frameworks.Commands.Parser
                     return true;
                 }
 
-                //Verify that the sender/user has permission to run this command.
-                if (!command.HasAccess(accessLevel, out string accessError))
+                // Console-only commands can never be run by a player.
+                if (command.ConsoleOnly && data is NetPlayer)
                 {
-                    OnParseError(this, accessError);
+                    OnParseError(this, $"Command '{command.Name}' can only be run from the server console.");
                     return true;
                 }
 
+                //Verify that the sender/user can run this command (rank permissions are checked in CanExecute).
                 var preExecuteError = command.CanExecute(command);
                 if (!string.IsNullOrEmpty(preExecuteError))
                 {
+                    CommandRejected?.Invoke(command, preExecuteError);
                     OnParseError(this, preExecuteError);
                     return true;
                 }
@@ -203,7 +210,7 @@ namespace Pyratron.Frameworks.Commands.Parser
                 inputArgs.RemoveAt(0); //Remove the command name.
                 if (!ParseArguments(false, alias, command, command, inputArgs, returnArgs))
                 {
-                    if (!command.TryExecute(returnArgs.ToArray(), inputArgs.ToArray(), data, accessLevel, out string executeError))
+                    if (!command.TryExecute(returnArgs.ToArray(), inputArgs.ToArray(), data, out string executeError))
                         OnParseError(this, executeError);
                 }
 
@@ -216,9 +223,10 @@ namespace Pyratron.Frameworks.Commands.Parser
         /// <summary>
         /// Ran when no commands are found. Will create an error detailing what went wrong.
         /// </summary>
-        private void NoCommandsFound(List<string> inputArgs, NetPlayer caller)
+        private void NoCommandsFound(string typedInput, List<string> inputArgs, NetPlayer caller)
         {
-            OnParseError(this, string.Format("Command '{0}' not found.", inputArgs[0]));
+            CommandNotFound?.Invoke(inputArgs[0]);
+            OnParseError(this, string.Format("Command '{0}' not found.", typedInput));
 
             //Find related commands (Did you mean?)
             var related = FindRelatedCommands(inputArgs[0], caller);
@@ -238,7 +246,7 @@ namespace Pyratron.Frameworks.Commands.Parser
             var sb = new StringBuilder();
             for (var i = 0; i < related.Count; i++)
             {
-                sb.Append('\'').Append(related[i]).Append('\'');
+                sb.Append('\'').Append(Prefix).Append(related[i]).Append('\'');
                 if (related.Count > 1)
                 {
                     if (i == related.Count - 2)
@@ -262,8 +270,7 @@ namespace Pyratron.Frameworks.Commands.Parser
                 if (caller == null && command.RequireCaller)
                     continue;
 
-                int accessLevel = caller?.RankWeight ?? int.MaxValue;
-                if (!command.HasAccess(accessLevel, out _))
+                if (caller != null && command.ConsoleOnly)
                     continue;
 
                 var executeError = command.CanExecute(command);

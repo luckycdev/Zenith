@@ -7,7 +7,7 @@ using ServerShared.Player;
 namespace ServerShared.Commands
 {
     [Command("Spectate by name", "spectate", "Start spectating another player by their name.")]
-    [CommandPermission("zenith.spectate.spectate", AccessLevel.Player)]
+    [CommandPermission("zenith.spectate.spectate", DefaultRanks.Member)]
     [RequireCaller]
     public class SpectateCommand : BaseCommand
     {
@@ -48,7 +48,7 @@ namespace ServerShared.Commands
     }
 
     [Command("Spectate by id", "spectateid", "Start spectating another player by their id.")]
-    [CommandPermission("zenith.spectate.spectateid", AccessLevel.Player)]
+    [CommandPermission("zenith.spectate.spectateid", DefaultRanks.Member)]
     [RequireCaller]
     public class SpectateIdCommand : BaseCommand
     {

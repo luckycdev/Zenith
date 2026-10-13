@@ -5,7 +5,7 @@ using UnityEngine;
 namespace ServerShared.Commands
 {
     [Command("Exit", new[] { "exit", "quit" }, "Shutdown the server.")]
-    [CommandPermission("zenith.console.exit", AccessLevel.Console)]
+    [ConsoleOnly]
     public class ExitCommand : BaseCommand
     {
         public override void Handle(string[] args)
@@ -15,7 +15,7 @@ namespace ServerShared.Commands
     }
 
     [Command("Say", "say", "Send a chat message to all players.")]
-    [CommandPermission("zenith.console.say", AccessLevel.Console)]
+    [ConsoleOnly]
     public class SayCommand : BaseCommand
     {
         public override void Handle(string[] args)

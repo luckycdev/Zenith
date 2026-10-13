@@ -1,5 +1,5 @@
 ﻿using System;
-using ServerShared.Player;
+using ServerShared;
 
 namespace Pyratron.Frameworks.Commands.Parser
 {
@@ -38,18 +38,19 @@ namespace Pyratron.Frameworks.Commands.Parser
     }
 
     /// <summary>
-    /// Declares the permission string and default access level for a command.
+    /// Declares the permission node for a command, and the rank that gets it by default
+    /// (added to that rank in permissions.json the first time the command is loaded). Use the <c>DefaultRanks</c> names.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
     public class CommandPermissionAttribute : Attribute
     {
         public readonly string Permission;
-        public readonly AccessLevel DefaultAccessLevel;
+        public readonly string DefaultRank;
 
-        public CommandPermissionAttribute(string permission, AccessLevel defaultAccessLevel = AccessLevel.Player)
+        public CommandPermissionAttribute(string permission, string defaultRank = DefaultRanks.Member)
         {
             Permission = permission;
-            DefaultAccessLevel = defaultAccessLevel;
+            DefaultRank = defaultRank;
         }
     }
 
@@ -59,5 +60,31 @@ namespace Pyratron.Frameworks.Commands.Parser
     [AttributeUsage(AttributeTargets.Class)]
     public class RequireCallerAttribute : Attribute
     {
+    }
+
+    /// <summary>
+    /// Specifies that the command can only be run from the server console. Players can never run it, regardless of their permissions,
+    /// so it doesn't need a permission node.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class)]
+    public class ConsoleOnlyAttribute : Attribute
+    {
+    }
+
+    /// <summary>
+    /// Registers an extra permission node that the command checks itself (for example one per subcommand, checked with
+    /// <c>HasAccess("node")</c>), and the rank that gets it by default. Can be used multiple times.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+    public class RegisterPermissionAttribute : Attribute
+    {
+        public readonly string Permission;
+        public readonly string DefaultRank;
+
+        public RegisterPermissionAttribute(string permission, string defaultRank = DefaultRanks.Member)
+        {
+            Permission = permission;
+            DefaultRank = defaultRank;
+        }
     }
 }

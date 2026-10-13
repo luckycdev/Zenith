@@ -7,7 +7,7 @@ using ServerShared.Player;
 namespace ServerShared.Commands
 {
     [Command("Status", "status", "Show server status and connected players.")]
-    [CommandPermission("zenith.console.status", AccessLevel.Console)]
+    [ConsoleOnly]
     public class StatusCommand : BaseCommand
     {
         public override void Handle(string[] args)
@@ -20,7 +20,7 @@ namespace ServerShared.Commands
 
             foreach (var player in Server.Players.Values)
             {
-                builder.AppendLine($"- {player.Name} ({player.Identity}) (Access Level: {player.RankName})");
+                builder.AppendLine($"- {player.Name} ({player.Identity}) (Rank: {player.RankName})");
             }
 
             builder.AppendLine($"Zenith Version {SharedConstants.ZenithVersion} (GOIMP Version {SharedConstants.Version})");

@@ -72,50 +72,27 @@ namespace ServerShared.Player
         }
     }
 
-    public class PlayerAccessLevelIdentity : PlayerIdentity
+    /// <summary>A player identity (steam id, or IP + name) with the permission rank it has been given.</summary>
+    public class PlayerRankIdentity : PlayerIdentity
     {
-        public AccessLevel AccessLevel;
         public string RankName;
 
         public string GetRankName()
         {
-            if (!string.IsNullOrWhiteSpace(RankName))
-                return RankName;
-
-            return AccessLevel == AccessLevel.Player ? "Default" : AccessLevel.ToString();
+            return string.IsNullOrWhiteSpace(RankName) ? DefaultRanks.Member : RankName;
         }
 
-        public PlayerAccessLevelIdentity(ulong steamId, AccessLevel accessLevel) : base(steamId)
-        {
-            AccessLevel = accessLevel;
-            RankName = accessLevel == AccessLevel.Player ? "Default" : accessLevel.ToString();
-        }
-
-        public PlayerAccessLevelIdentity(uint ip, AccessLevel accessLevel) : base(ip)
-        {
-            AccessLevel = accessLevel;
-            RankName = accessLevel == AccessLevel.Player ? "Default" : accessLevel.ToString();
-        }
-
-        public PlayerAccessLevelIdentity(uint ip, string name, AccessLevel accessLevel) : base(ip, name)
-        {
-            AccessLevel = accessLevel;
-            RankName = accessLevel == AccessLevel.Player ? "Default" : accessLevel.ToString();
-        }
-
-        public PlayerAccessLevelIdentity(ulong steamId, string rankName, AccessLevel accessLevel) : base(steamId)
+        public PlayerRankIdentity(ulong steamId, string rankName) : base(steamId)
         {
             RankName = rankName;
-            AccessLevel = accessLevel;
         }
 
-        public PlayerAccessLevelIdentity(uint ip, string name, string rankName, AccessLevel accessLevel) : base(ip, name)
+        public PlayerRankIdentity(uint ip, string name, string rankName) : base(ip, name)
         {
             RankName = rankName;
-            AccessLevel = accessLevel;
         }
 
         [JsonConstructor]
-        private PlayerAccessLevelIdentity() { }
+        private PlayerRankIdentity() { }
     }
 }

@@ -7,7 +7,7 @@ using ServerShared.Player;
 namespace ServerShared.Commands
 {
     [Command("Plugins", new[] { "plugins" }, "Manage plugins (list or reload).")]
-    [CommandPermission("zenith.console.plugins", AccessLevel.Console)]
+    [ConsoleOnly]
     public class PluginsCommand : BaseCommand
     {
         public override void Handle(string[] args)

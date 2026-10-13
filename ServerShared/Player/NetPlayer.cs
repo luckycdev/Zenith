@@ -19,10 +19,9 @@ namespace ServerShared.Player
         public int Wins { get; private set; } = 0;
         public float Goldness { get; private set; }
         public Color PotColor { get; private set; } = Color.white;
-        public PlayerAccessLevelIdentity Identity { get; private set; }
-        public AccessLevel AccessLevel => Identity.AccessLevel;
+        public PlayerRankIdentity Identity { get; private set; }
         public string RankName => Identity.GetRankName();
-        public int RankWeight => server?.Config?.Permissions?.GetRankWeight(RankName) ?? (int)AccessLevel;
+        public int RankWeight => server?.Config?.Permissions?.GetRankWeight(RankName) ?? 0;
 
         private GameServer server;
 
@@ -37,8 +36,8 @@ namespace ServerShared.Player
             Id = idCounter++;
 
             Identity = server.RequireSteamAuth
-                ? new PlayerAccessLevelIdentity(steamId, AccessLevel.Player)
-                : new PlayerAccessLevelIdentity(connection.RemoteEndPoint.Address.ToUint32(), AccessLevel.Player);
+                ? new PlayerRankIdentity(steamId, DefaultRanks.Member)
+                : new PlayerRankIdentity(connection.RemoteEndPoint.Address.ToUint32(), name, DefaultRanks.Member);
         }
         
         /// <param name="color">If null then Color.white will be used.</param>
@@ -160,16 +159,9 @@ namespace ServerShared.Player
                 SetGoldness(Mathf.Pow(wins / 50f, 2), broadcastToClients);
         }
 
-        public void SetAccessLevel(AccessLevel accessLevel)
+        public void SetRank(string rankName)
         {
-            Identity.AccessLevel = accessLevel;
-            Identity.RankName = accessLevel == AccessLevel.Player ? "Default" : accessLevel.ToString();
-        }
-
-        public void SetAccessLevel(string rankName, AccessLevel mappedAccessLevel)
-        {
-            Identity.RankName = rankName;
-            Identity.AccessLevel = mappedAccessLevel;
+            Identity.RankName = string.IsNullOrWhiteSpace(rankName) ? DefaultRanks.Member : rankName;
         }
 
         private void BroadcastPotProperties()

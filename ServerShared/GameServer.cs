@@ -488,110 +488,111 @@ namespace ServerShared
             connection.Disconnect(reason, additionalInfo);
         }
 
-        public void SetAccessLevel(ulong steamId, AccessLevel accessLevel)
+        /// <summary>
+        /// Sets the rank of a steam id. Setting the Member rank removes the player's rank entry.
+        /// </summary>
+        public void SetRank(ulong steamId, string rankName)
         {
-            SetAccessLevel(steamId, accessLevel == AccessLevel.Player ? "Default" : accessLevel.ToString());
-        }
-
-        public void SetAccessLevel(ulong steamId, string rankName)
-        {
-            bool isDefaultRank = string.IsNullOrWhiteSpace(rankName) || rankName.Equals("Default", StringComparison.OrdinalIgnoreCase) || rankName.Equals("Player", StringComparison.OrdinalIgnoreCase);
-
-            if (isDefaultRank)
+            if (IsMemberRank(rankName))
             {
-                Config.PlayerData.AccessLevels.RemoveAll(id => id.Type == IdentityType.SteamId && id.SteamId == steamId);
-                Config.Save();
-                
-                // Update access level for all connected players matching this Steam ID
-                foreach (var player in Players.Values.Where(p => p.SteamId == steamId))
-                {
-                    UpdateAccessLevel(player);
-                }
-                return;
+                Config.PlayerData.PlayerRanks.RemoveAll(id => id.Type == IdentityType.SteamId && id.SteamId == steamId);
             }
-
-            var mappedAccessLevel = Config.Permissions.GetMappedAccessLevel(rankName);
-            var identity = Config.PlayerData.AccessLevels.FirstOrDefault(id => id.Type == IdentityType.SteamId && id.SteamId == steamId)
-                ?? new PlayerAccessLevelIdentity(steamId, rankName, mappedAccessLevel);
-            identity.RankName = rankName;
-            identity.AccessLevel = mappedAccessLevel;
-
-            if (!Config.PlayerData.AccessLevels.Contains(identity))
+            else
             {
-                Config.PlayerData.AccessLevels.Add(identity);
+                var identity = Config.PlayerData.PlayerRanks.FirstOrDefault(id => id.Type == IdentityType.SteamId && id.SteamId == steamId);
+
+                if (identity == null)
+                    Config.PlayerData.PlayerRanks.Add(new PlayerRankIdentity(steamId, rankName));
+                else
+                    identity.RankName = rankName;
             }
 
             Config.Save();
-            
-            // Update access level for all connected players matching this Steam ID
+
+            // Update the rank of all connected players matching this steam id.
             foreach (var player in Players.Values.Where(p => p.SteamId == steamId))
-            {
-                UpdateAccessLevel(player);
-            }
+                UpdateRank(player);
         }
 
-        public void SetAccessLevel(IPAddress ipAddress, AccessLevel accessLevel, string playerName = null)
-        {
-            SetAccessLevel(ipAddress, accessLevel == AccessLevel.Player ? "Default" : accessLevel.ToString(), playerName);
-        }
-
-        public void SetAccessLevel(IPAddress ipAddress, string rankName, string playerName = null)
+        /// <summary>
+        /// Sets the rank of an IP. IP ranks only apply when both the IP and the player name match.
+        /// Setting the Member rank removes the matching rank entries.
+        /// </summary>
+        public void SetRank(IPAddress ipAddress, string rankName, string playerName)
         {
             uint uintIp = ipAddress.ToUint32();
             bool hasPlayerName = !string.IsNullOrWhiteSpace(playerName);
-            bool isDefaultRank = string.IsNullOrWhiteSpace(rankName) || rankName.Equals("Default", StringComparison.OrdinalIgnoreCase) || rankName.Equals("Player", StringComparison.OrdinalIgnoreCase);
 
-            if (isDefaultRank)
-            {
-                Config.PlayerData.AccessLevels.RemoveAll(id => id.Type == IdentityType.Ip
-                    && id.Ip == uintIp
-                    && (!hasPlayerName || (!string.IsNullOrWhiteSpace(id.Name) && id.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase))));
-                Config.Save();
-                
-                // Update access level for all connected players matching this IP (and name when specified)
-                foreach (var player in Players.Values.Where(p => p.Peer.RemoteEndPoint.Address.ToUint32() == uintIp
-                    && (!hasPlayerName || p.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase))))
-                {
-                    UpdateAccessLevel(player);
-                }
-                return;
-            }
-
-            var mappedAccessLevel = Config.Permissions.GetMappedAccessLevel(rankName);
-            var identity = Config.PlayerData.AccessLevels.FirstOrDefault(id => id.Type == IdentityType.Ip
+            bool MatchesIdentity(PlayerRankIdentity id) => id.Type == IdentityType.Ip
                 && id.Ip == uintIp
-                && (!hasPlayerName || (!string.IsNullOrWhiteSpace(id.Name) && id.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase))))
-                ?? new PlayerAccessLevelIdentity(uintIp, playerName, rankName, mappedAccessLevel);
+                && (!hasPlayerName || (!string.IsNullOrWhiteSpace(id.Name) && id.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase)));
 
-            if (hasPlayerName)
-                identity.Name = playerName;
-
-            identity.RankName = rankName;
-            identity.AccessLevel = mappedAccessLevel;
-
-            if (!Config.PlayerData.AccessLevels.Contains(identity))
+            if (IsMemberRank(rankName))
             {
-                Config.PlayerData.AccessLevels.Add(identity);
+                Config.PlayerData.PlayerRanks.RemoveAll(MatchesIdentity);
+            }
+            else
+            {
+                if (!hasPlayerName)
+                    throw new ArgumentException("A player name is required to give an IP a rank.", nameof(playerName));
+
+                var identity = Config.PlayerData.PlayerRanks.FirstOrDefault(MatchesIdentity);
+
+                if (identity == null)
+                {
+                    Config.PlayerData.PlayerRanks.Add(new PlayerRankIdentity(uintIp, playerName, rankName));
+                }
+                else
+                {
+                    identity.Name = playerName;
+                    identity.RankName = rankName;
+                }
             }
 
             Config.Save();
-            
-            // Update access level for all connected players matching this IP (and name when specified)
+
+            // Update the rank of all connected players matching this IP (and name when specified).
             foreach (var player in Players.Values.Where(p => p.Peer.RemoteEndPoint.Address.ToUint32() == uintIp
                 && (!hasPlayerName || p.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase))))
             {
-                UpdateAccessLevel(player);
+                UpdateRank(player);
             }
         }
 
-        public void UpdateAccessLevel(NetPlayer player)
+        private static void LogPlayerCommand(NetPlayer player, CommandResult result)
         {
-            var identity = Config.PlayerData.AccessLevels.FirstOrDefault(id => id.Matches(player));
+            switch (result.Status)
+            {
+                case CommandStatus.Ran:
+                    Logger.LogInfo($"{player.Name} ran the command '{result.Input}'.");
+                    break;
+                case CommandStatus.NoPermission:
+                    Logger.LogInfo($"{player.Name} tried to run the command '{result.Input}' but doesn't have permission.");
+                    break;
+                case CommandStatus.NotFound:
+                    Logger.LogInfo($"{player.Name} tried to run the command '{result.Input}', which doesn't exist.");
+                    break;
+                case CommandStatus.Failed:
+                    Logger.LogInfo($"{player.Name} tried to run the command '{result.Input}' but it failed: {result.Error}");
+                    break;
+            }
+        }
 
-            if (identity == null)
-                player.SetAccessLevel(AccessLevel.Player);
-            else
-                player.SetAccessLevel(identity.GetRankName(), identity.AccessLevel);
+        /// <summary>Re-reads a connected player's rank from the player data.</summary>
+        public void UpdateRank(NetPlayer player)
+        {
+            var identity = Config.PlayerData.PlayerRanks.FirstOrDefault(id => id.Matches(player));
+            string rankName = identity?.GetRankName() ?? DefaultRanks.Member;
+
+            if (Config.Permissions.FindRank(rankName) == null)
+                Logger.LogWarning($"{player.Name} has the rank '{rankName}', which doesn't exist in permissions.json. They will be treated as {DefaultRanks.Member}.");
+
+            player.SetRank(rankName);
+        }
+
+        private static bool IsMemberRank(string rankName)
+        {
+            return string.IsNullOrWhiteSpace(rankName) || rankName.Equals(DefaultRanks.Member, StringComparison.OrdinalIgnoreCase);
         }
 
         private void OnConnectionConnected(object sender, ConnectedEventArgs args)
@@ -717,7 +718,7 @@ namespace ServerShared
         {
             var player = AddConnection(connection, playerName, steamId, wins);
             player.Movement = movementData;
-            UpdateAccessLevel(player);
+            UpdateRank(player);
 
             var writer = server.CreateMessage();
             writer.Write(MessageType.CreatePlayer);
@@ -835,14 +836,11 @@ namespace ServerShared
                         if (message.Length > SharedConstants.MaxChatLength)
                             message = message.Substring(0, SharedConstants.MaxChatLength);
 
-                        string command = PlayerCommands.HandleMessage(peerPlayer, message);
+                        var commandResult = PlayerCommands.HandleMessage(peerPlayer, message);
 
-                        if (command != null)
+                        if (commandResult.Status != CommandStatus.NotACommand)
                         {
-                            if (!string.IsNullOrWhiteSpace(command))
-                                Logger.LogInfo($"{peerPlayer.Name} ran the command {command}");
-                            else
-                                Logger.LogInfo($"{peerPlayer.Name} attempted command {message}");
+                            LogPlayerCommand(peerPlayer, commandResult);
                             return;
                         }
 

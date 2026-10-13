@@ -6,7 +6,7 @@ using UnityEngine;
 namespace ServerShared.Commands
 {
     [Command("Set goldness", "goldness", "Set yours or someone elses pot's goldness.")]
-    [CommandPermission("zenith.cheat.goldness", AccessLevel.Moderator)]
+    [CommandPermission("zenith.cheat.goldness", DefaultRanks.Moderator)]
     public class SetGoldnessCommand : BaseCommand
     {
         [CommandArgument("Goldness")]
@@ -51,7 +51,7 @@ namespace ServerShared.Commands
     }
 
     [Command("Set pot color", "potcolor", "Set yours or someone elses pot's color.")]
-    [CommandPermission("zenith.cheat.potcolor", AccessLevel.Moderator)]
+    [CommandPermission("zenith.cheat.potcolor", DefaultRanks.Moderator)]
     public class SetPotColorCommand : BaseCommand
     {
         [CommandArgument("Red (0-1)")]

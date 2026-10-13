@@ -7,7 +7,7 @@ using ServerShared.Player;
 namespace ServerShared.Commands
 {
     [Command("Unban by name", "unban", "Unban a player with the specified name. The name must partially match the same name that was used when the player was banned.")]
-    [CommandPermission("zenith.unban.unban", AccessLevel.Moderator)]
+    [CommandPermission("zenith.unban.unban", DefaultRanks.Moderator)]
     public class UnbanNameCommand : BaseCommand
     {
         [CommandArgument("Player name")]
@@ -39,7 +39,7 @@ namespace ServerShared.Commands
     }
 
     [Command("Unban by steam id", "unbanid", "Unban a steam id.")]
-    [CommandPermission("zenith.unban.unbanid", AccessLevel.Moderator)]
+    [CommandPermission("zenith.unban.unbanid", DefaultRanks.Moderator)]
     public class UnbanSteamIdCommand : BaseCommand
     {
         [CommandArgument("Steam id")]
@@ -61,7 +61,7 @@ namespace ServerShared.Commands
     }
 
     [Command("Unban by IP", "unbanip", "Unban an IP.")]
-    [CommandPermission("zenith.unban.unbanip", AccessLevel.Moderator)]
+    [CommandPermission("zenith.unban.unbanip", DefaultRanks.Moderator)]
     public class UnbanIpCommand : BaseCommand
     {
         [CommandArgument("IP")]

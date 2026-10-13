@@ -5,7 +5,7 @@ using UnityEngine;
 namespace ServerShared.Commands
 {
     [Command("Shrug", "shrug", "Writes an optional message followed by ¯\\_(ツ)_/¯.")]
-    [CommandPermission("zenith.emote.shrug", AccessLevel.Player)]
+    [CommandPermission("zenith.emote.shrug", DefaultRanks.Member)]
     [RequireCaller]
     public class ShrugCommand : BaseCommand
     {
@@ -22,7 +22,7 @@ namespace ServerShared.Commands
     }
 
     [Command("Tableflip", "tableflip", "Writes an optional message followed by (╯°□°）╯︵ ┻━┻.")]
-    [CommandPermission("zenith.emote.tableflip", AccessLevel.Player)]
+    [CommandPermission("zenith.emote.tableflip", DefaultRanks.Member)]
     [RequireCaller]
     public class TableflipCommand : BaseCommand
     {

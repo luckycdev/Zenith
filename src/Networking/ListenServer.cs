@@ -26,9 +26,19 @@ namespace Oxide.GettingOverItMP.Networking
             Server.Start();
 
             if (SteamClient.IsValid)
-                Server.SetAccessLevel(SteamClient.SteamId, AccessLevel.Admin);
+            {
+                Server.SetRank(SteamClient.SteamId, DefaultRanks.Admin);
+            }
             else
-                Server.SetAccessLevel(IPAddress.Parse("127.0.0.1"), AccessLevel.Admin);
+            {
+                // IP ranks require both the IP and the player name to match.
+                string hostName = UnityEngine.PlayerPrefs.GetString("GOIMP_PlayerName", "").Trim();
+
+                if (!string.IsNullOrEmpty(hostName))
+                    Server.SetRank(IPAddress.Parse("127.0.0.1"), DefaultRanks.Admin, hostName);
+                else
+                    Logger.LogWarning("No player name set, the host will not be given the Admin rank.");
+            }
         }
 
         private static void OnLogMessageReceived(LogMessageReceivedEventArgs args)
